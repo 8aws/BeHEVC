@@ -1,0 +1,17 @@
+{
+  "app": {
+    "version": "0.1.0",
+    "release_date": "2025-05-27",
+    "changelog": "Initial release",
+    "downloads": {
+      "macos_arm":   "https://b265.uverse.es/downloads/BeHEVC_0.1.0_aarch64.dmg",
+      "macos_intel": "https://b265.uverse.es/downloads/BeHEVC_0.1.0_x86_64.dmg",
+      "windows":     "https://b265.uverse.es/downloads/BeHEVC_0.1.0_x64-setup.exe",
+      "linux":       "https://b265.uverse.es/downloads/BeHEVC_0.1.0_amd64.AppImage"
+    }
+  },
+  "ffmpeg": {
+    "recommended_version": "7.1.1",
+    "download": "https://evermeet.cx/ffmpeg/"
+  }
+}

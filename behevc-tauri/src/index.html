@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BeHEVC</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- ── Cabecera ─────────────────────────────────────────────────── -->
+    <header>
+      <div class="brand">
+        <h1>BeHEVC</h1>
+        <p>Compresión inteligente. Calidad profesional.</p>
+      </div>
+      <div class="header-badges">
+        <span id="ffmpeg-status">cargando…</span>
+        <span id="ffmpeg-version" hidden></span>
+        <button id="btn-check-update" class="btn-update" hidden title="Abrir página de descarga de ffmpeg">↑ Actualizar ffmpeg</button>
+      </div>
+    </header>
+
+    <!-- ── Carpetas ─────────────────────────────────────────────────── -->
+    <section class="folders">
+      <div class="folder-row">
+        <button id="btn-output"      class="btn-outline">Carpeta destino…</button>
+        <button id="btn-add-files"   class="btn-outline">+ Añadir vídeos…</button>
+        <button id="btn-add-folder"  class="btn-outline">+ Añadir carpeta…</button>
+        <button id="btn-backup"      class="btn-outline">Carpeta backup…</button>
+      </div>
+      <div class="folder-info">
+        <span id="output-path"  class="path-label"></span>
+        <span id="backup-path"  class="path-label"></span>
+      </div>
+    </section>
+
+    <!-- ── Progreso de análisis ──────────────────────────────────────── -->
+    <div id="scan-status" hidden>
+      <div class="scan-row">
+        <span id="scan-label" class="scan-label">Analizando…</span>
+        <div class="progress-bar scan-bar">
+          <div class="progress-fill" id="prog-scan"></div>
+        </div>
+        <span id="scan-counter" class="scan-counter"></span>
+      </div>
+    </div>
+
+    <!-- ── Estadísticas ─────────────────────────────────────────────── -->
+    <div class="stats" id="stats" hidden>
+      <span class="stat-item">Total: <strong id="stat-total">0</strong></span>
+      <span class="stat-item orange">A convertir: <strong id="stat-convert">0</strong></span>
+      <span class="stat-item dim">Ya HEVC: <strong id="stat-skip">0</strong></span>
+      <span class="stat-item green">Hechos: <strong id="stat-done">0</strong></span>
+    </div>
+
+    <!-- ── Lista de archivos ─────────────────────────────────────────── -->
+    <div class="file-list-wrapper" id="file-list-wrapper">
+      <div class="empty-state" id="empty-state">
+        <span>🎬</span>
+        Selecciona primero la carpeta de destino, luego añade vídeos
+      </div>
+      <table class="file-list" id="file-table" hidden>
+        <thead>
+          <tr>
+            <th class="col-name">Archivo</th>
+            <th class="col-codec">Codec</th>
+            <th class="col-status">Estado</th>
+          </tr>
+        </thead>
+        <tbody id="file-list-body"></tbody>
+      </table>
+    </div>
+
+    <!-- ── Progreso de conversión ────────────────────────────────────── -->
+    <section class="progress-section">
+      <div class="progress-row">
+        <label>Archivo actual</label>
+        <div class="progress-bar"><div class="progress-fill" id="prog-file"></div></div>
+      </div>
+      <div class="progress-row">
+        <label>Global</label>
+        <div class="progress-bar"><div class="progress-fill" id="prog-global"></div></div>
+      </div>
+    </section>
+
+    <!-- ── Acciones ──────────────────────────────────────────────────── -->
+    <div class="actions">
+      <button id="btn-start"  class="btn-primary" disabled>Convertir a HEVC</button>
+      <button id="btn-cancel" class="btn-danger"  hidden>Cancelar</button>
+      <span id="all-hevc-notice" hidden>✔ All files are already HEVC — nothing to convert</span>
+      <span id="start-hint"   hidden></span>
+    </div>
+
+    <!-- ── Banner de completado ──────────────────────────────────────── -->
+    <div id="completion-banner" hidden>
+      <div class="completion-icon">✅</div>
+      <div class="completion-body">
+        <div class="completion-title">Conversión completada</div>
+        <div id="completion-summary" class="completion-summary"></div>
+      </div>
+      <div class="completion-actions">
+        <button id="btn-open-output" class="btn-completion-primary">Abrir destino</button>
+        <button id="btn-new-session" class="btn-completion-secondary">Nueva sesión</button>
+      </div>
+    </div>
+
+    <!-- ── Log ───────────────────────────────────────────────────────── -->
+    <div class="log-wrapper">
+      <pre id="log"></pre>
+    </div>
+
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+[package]
+name = "behevc"
+version = "0.1.0"
+edition = "2021"
+
+# "cdylib" es necesario para que Tauri pueda cargar la librería en iOS/Android
+# "staticlib" para builds de escritorio
+# "lib" para tests unitarios
+[lib]
+name = "behevc_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Tauri 2 — framework principal
+tauri = { version = "2", features = [] }
+
+# Plugin para abrir diálogos nativos de archivos/carpetas
+tauri-plugin-dialog = "2"
+
+# Serialización JSON (necesario para comunicar datos entre Rust y JS)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Runtime async — para ejecutar tareas pesadas sin bloquear la UI
+tokio = { version = "1", features = ["full"] }
+
+# Escaneo recursivo de directorios
+walkdir = "2"
+
+[profile.release]
+# Optimizaciones para el binario final
+opt-level = 3
+lto = true        # Link-Time Optimization: binario más pequeño y rápido
+codegen-units = 1 # Más lento de compilar pero mejor optimización
+strip = true      # Elimina símbolos de debug del binario final

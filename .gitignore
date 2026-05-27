@@ -1,0 +1,23 @@
+# ── Rust / Tauri ──────────────────────────────────────────────────────────
+behevc-tauri/src-tauri/target/
+
+# ffmpeg binaries — demasiado grandes para git (77 MB cada uno)
+# El workflow de CI los descarga automáticamente en cada build
+behevc-tauri/src-tauri/resources/ffmpeg
+behevc-tauri/src-tauri/resources/ffprobe
+behevc-tauri/src-tauri/resources/ffmpeg.exe
+behevc-tauri/src-tauri/resources/ffprobe.exe
+
+# ── Node ──────────────────────────────────────────────────────────────────
+behevc-tauri/node_modules/
+behevc-tauri/package-lock.json
+
+# ── macOS ─────────────────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
+*.xcuserstate
+xcuserdata/
+
+# ── Xcode (código Swift original, por si acaso) ───────────────────────────
+*.xcworkspace/xcuserdata
+DerivedData/
