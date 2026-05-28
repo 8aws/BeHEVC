@@ -8,6 +8,9 @@ on:
       - 'v*.*.*'
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     strategy:
@@ -120,7 +123,7 @@ jobs:
 
       - name: Upload — macOS DMG
         if: startsWith(matrix.platform, 'macos')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: BeHEVC-${{ matrix.label }}
           path: behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
@@ -128,7 +131,7 @@ jobs:
 
       - name: Upload — Windows
         if: matrix.platform == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: BeHEVC-${{ matrix.label }}
           path: |
@@ -138,7 +141,7 @@ jobs:
 
       - name: Upload — Linux AppImage
         if: matrix.platform == 'ubuntu-22.04'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: BeHEVC-${{ matrix.label }}
           path: behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
