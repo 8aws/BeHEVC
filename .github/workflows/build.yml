@@ -83,29 +83,30 @@ jobs:
           chmod +x behevc-tauri/src-tauri/resources/ffmpeg
           chmod +x behevc-tauri/src-tauri/resources/ffprobe
 
-      - name: Windows — descargar ffmpeg + ffprobe (gyan.dev)
+      - name: Windows — descargar ffmpeg + ffprobe (BtbN/FFmpeg-Builds)
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "behevc-tauri/src-tauri/resources" | Out-Null
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" `
-            -OutFile ffmpeg.zip -UseBasicParsing
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip -UseBasicParsing
           Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp -Force
           $bin = (Get-ChildItem ffmpeg_tmp -Directory | Select-Object -First 1).FullName + "\bin"
           Copy-Item "$bin\ffmpeg.exe"  "behevc-tauri/src-tauri/resources/"
           Copy-Item "$bin\ffprobe.exe" "behevc-tauri/src-tauri/resources/"
           Remove-Item ffmpeg.zip, ffmpeg_tmp -Recurse -Force
 
-      - name: Linux — descargar ffmpeg + ffprobe (johnvansickle.com)
+      - name: Linux — descargar ffmpeg + ffprobe (BtbN/FFmpeg-Builds)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           mkdir -p behevc-tauri/src-tauri/resources
-          curl -fsSL "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" \
+          curl -fsSL -L \
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz" \
             -o ffmpeg.tar.xz
           tar -xf ffmpeg.tar.xz
-          DIR=$(find . -maxdepth 1 -name 'ffmpeg-*-amd64-static' -type d | head -1)
-          cp "$DIR/ffmpeg"  behevc-tauri/src-tauri/resources/
-          cp "$DIR/ffprobe" behevc-tauri/src-tauri/resources/
+          DIR=$(find . -maxdepth 1 -name 'ffmpeg-master-latest-linux64-gpl' -type d | head -1)
+          cp "$DIR/bin/ffmpeg"  behevc-tauri/src-tauri/resources/
+          cp "$DIR/bin/ffprobe" behevc-tauri/src-tauri/resources/
           chmod +x behevc-tauri/src-tauri/resources/ffmpeg
           chmod +x behevc-tauri/src-tauri/resources/ffprobe
           rm -rf ffmpeg.tar.xz "$DIR"
