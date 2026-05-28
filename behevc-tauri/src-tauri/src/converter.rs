@@ -109,7 +109,7 @@ pub fn run_conversion(
             return successes;
         }
 
-        let output_valid = exit_ok && validate_output(&job.output);
+        let output_valid = exit_ok && validate_output(&job.output, &ffprobe_path, duration);
 
         // ── Intento 2 (fallback): solo vídeo + audio ───────────────────────
         let (exit_ok2, was_cancelled2) = if !output_valid {
@@ -139,7 +139,7 @@ pub fn run_conversion(
         // ── Evaluar resultado final ────────────────────────────────────────
         // output_valid: el intento 1 produjo un archivo bueno
         // final_valid:  el intento 2 (fallback) produjo un archivo bueno
-        let final_valid = if !output_valid { validate_output(&job.output) } else { true };
+        let final_valid = if !output_valid { validate_output(&job.output, &ffprobe_path, duration) } else { true };
 
         if output_valid || final_valid {
             successes[index] = true;
@@ -151,6 +151,9 @@ pub fn run_conversion(
             let _ = std::fs::remove_file(&job.output);
             let reason = if !exit_ok && !exit_ok2 {
                 "ffmpeg terminó con error en ambos intentos"
+            } else if exit_ok || exit_ok2 {
+                "ffmpeg terminó sin error pero el archivo de salida está truncado o es demasiado pequeño \
+                 (posible error de disco, espacio insuficiente, o fallo de memoria durante la codificación)"
             } else {
                 "archivo de salida vacío o inválido tras ambos intentos"
             };
@@ -269,13 +272,51 @@ fn run_ffmpeg_pass(
 // Validación del archivo de salida
 // ---------------------------------------------------------------------------
 
-/// Comprueba que el archivo existe y tiene un tamaño mínimo razonable (> 10 KB)
-fn validate_output(path: &str) -> bool {
+/// Valida que el archivo de salida es un vídeo real y completo.
+///
+/// Realiza dos comprobaciones:
+///
+/// 1. **Tamaño mínimo proporcional**: si conocemos la duración del original,
+///    el archivo debe pesar al menos 5 KB/s (≈ 40 kbps — límite absurdamente
+///    bajo para HEVC, pero suficiente para detectar archivos casi vacíos).
+///    Para archivos < 60 s o duración desconocida se exige mínimo 512 KB.
+///
+/// 2. **Duración real** (ffprobe sobre la salida): debe ser ≥ 90 % de la
+///    duración original. Detecta casos en que el contenedor MKV/MP4 contiene
+///    un header correcto pero el cuerpo del vídeo está truncado.
+fn validate_output(path: &str, ffprobe_path: &str, expected_duration: f64) -> bool {
     let p = Path::new(path);
     if !p.exists() { return false; }
-    std::fs::metadata(p)
-        .map(|m| m.len() > 10_240) // > 10 KB
-        .unwrap_or(false)
+
+    let size = match std::fs::metadata(p) {
+        Ok(m) => m.len(),
+        Err(_) => return false,
+    };
+
+    // ── 1. Tamaño mínimo ──────────────────────────────────────────────────
+    if expected_duration > 60.0 {
+        // 5 KB/s × duración esperada en segundos
+        let min_bytes = (expected_duration * 5_000.0) as u64;
+        if size < min_bytes {
+            return false;
+        }
+    } else {
+        // Sin duración fiable: mínimo absoluto de 512 KB
+        if size < 512_000 {
+            return false;
+        }
+    }
+
+    // ── 2. Duración real por ffprobe ──────────────────────────────────────
+    if expected_duration > 0.0 {
+        let actual = get_duration(p, ffprobe_path);
+        // Si ffprobe devuelve algo, debe ser ≥ 90 % del original
+        if actual > 0.0 && actual < expected_duration * 0.90 {
+            return false;
+        }
+    }
+
+    true
 }
 
 // ---------------------------------------------------------------------------
