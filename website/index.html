@@ -10,7 +10,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
       --orange:      #FF7A00;
       --orange-dim:  rgba(255,122,0,0.12);
@@ -26,32 +25,14 @@
       --green:       #4ade80;
       --radius:      12px;
     }
-
     html { scroll-behavior: smooth; }
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      font-size: 15px; color: var(--text); background: var(--bg);
-      -webkit-font-smoothing: antialiased; overflow-x: hidden;
-    }
-    body::before {
-      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-      background:
-        radial-gradient(ellipse at 15% 0%,  rgba(130,80,255,0.08) 0%, transparent 50%),
-        radial-gradient(ellipse at 85% 80%, rgba(255,122,0,0.06)  0%, transparent 50%);
-    }
-    body::after {
-      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-      background-image: radial-gradient(circle, rgba(255,255,255,0.018) 1px, transparent 1px);
-      background-size: 24px 24px;
-    }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 15px; color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0; background: radial-gradient(ellipse at 15% 0%, rgba(130,80,255,0.08) 0%, transparent 50%), radial-gradient(ellipse at 85% 80%, rgba(255,122,0,0.06) 0%, transparent 50%); }
+    body::after  { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0; background-image: radial-gradient(circle, rgba(255,255,255,0.018) 1px, transparent 1px); background-size: 24px 24px; }
     .wrap { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 24px; }
 
     /* ── Nav ── */
-    nav {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(11,11,13,0.82); backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border);
-    }
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(11,11,13,0.82); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
     .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 58px; }
     .nav-brand { font-size: 20px; font-weight: 800; color: var(--orange); text-shadow: 0 0 20px rgba(255,122,0,0.4); text-decoration: none; }
     .nav-links { display: flex; gap: 28px; align-items: center; }
@@ -87,7 +68,7 @@
     .mock-badge-orange { color: var(--orange); background: var(--orange-dim); border: 1px solid rgba(255,122,0,0.2); }
     .mock-badge-green  { color: var(--green);  background: rgba(74,222,128,0.10); border: 1px solid rgba(74,222,128,0.2); }
 
-    /* ── Sections ── */
+    /* ── Section ── */
     section { padding: 72px 0; }
     .section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--orange); margin-bottom: 12px; }
     .section-title { font-size: clamp(28px, 4vw, 40px); font-weight: 800; letter-spacing: -1px; margin-bottom: 14px; line-height: 1.1; }
@@ -105,65 +86,95 @@
     /* ── Downloads ── */
     #downloads { scroll-margin-top: 80px; }
 
-    /* Banner de detección automática */
-    .detected-banner {
-      display: none;
-      align-items: center; gap: 12px;
-      background: var(--orange-dim);
-      border: 1px solid rgba(255,122,0,0.3);
-      border-radius: var(--radius);
-      padding: 14px 18px;
-      margin-top: 32px;
-      font-size: 13px;
+    /* Tarjetas principales — 3 en fila */
+    .download-grid-main {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 48px;
     }
-    .detected-banner.visible { display: flex; }
-    .detected-banner strong { color: var(--orange); }
-    .detected-banner a { color: var(--orange); font-weight: 700; text-decoration: none; }
-    .detected-banner a:hover { text-decoration: underline; }
-
-    /* Grid de descargas — 3 columnas por OS, 2 arquitecturas cada uno */
-    .download-os-group { margin-top: 48px; }
-    .download-os-title {
-      display: flex; align-items: center; gap: 10px;
-      font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
-      text-transform: uppercase; color: var(--text-dim);
-      margin-bottom: 12px;
-    }
-    .download-os-title .os-icon { font-size: 20px; }
-    .download-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
     .download-card {
-      background: var(--bg2); border: 1px solid var(--border-mid);
-      border-radius: var(--radius); padding: 20px 18px;
+      background: var(--bg2);
+      border: 1px solid var(--border-mid);
+      border-radius: var(--radius);
+      padding: 28px 22px;
+      text-align: center;
       transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
       position: relative;
     }
-    .download-card:hover { border-color: var(--orange); box-shadow: 0 0 20px var(--orange-glow); transform: translateY(-2px); }
-    .download-card.recommended {
-      border-color: var(--orange);
-      box-shadow: 0 0 24px var(--orange-glow);
-    }
-    .recommended-chip {
-      position: absolute; top: -10px; right: 14px;
-      font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
-      text-transform: uppercase; color: #fff;
-      background: var(--orange); border-radius: 20px; padding: 2px 9px;
-      display: none;
-    }
-    .download-card.recommended .recommended-chip { display: block; }
+    .download-card:hover { border-color: var(--orange); box-shadow: 0 0 24px var(--orange-glow); transform: translateY(-2px); }
+    .download-card.detected { border-color: var(--orange); box-shadow: 0 0 28px var(--orange-glow); }
 
-    .arch-label { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
-    .arch-sub   { font-size: 11px; color: var(--text-dim); margin-bottom: 14px; }
+    .detected-chip {
+      display: none;
+      position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+      font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #fff; background: var(--orange); border-radius: 20px; padding: 3px 11px;
+      white-space: nowrap;
+    }
+    .download-card.detected .detected-chip { display: block; }
+
+    .platform-icon { font-size: 40px; margin-bottom: 14px; line-height: 1; }
+    .platform-name { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+    .platform-arch { font-size: 11px; color: var(--orange); font-weight: 600; margin-bottom: 4px; }
+    .platform-sub  { font-size: 11px; color: var(--text-dim); margin-bottom: 20px; line-height: 1.5; }
+
     .btn-download {
       display: block; width: 100%;
-      font-family: inherit; font-weight: 700; font-size: 12px;
-      padding: 9px; border-radius: 8px; border: none; cursor: pointer;
+      font-family: inherit; font-weight: 700; font-size: 13px;
+      padding: 11px; border-radius: 8px; border: none; cursor: pointer;
       background: var(--orange); color: #fff; text-decoration: none; text-align: center;
       transition: background 0.15s, box-shadow 0.15s;
-      box-shadow: 0 2px 10px rgba(255,122,0,0.25);
+      box-shadow: 0 2px 12px rgba(255,122,0,0.3);
     }
-    .btn-download:hover { background: #e86e00; box-shadow: 0 4px 16px rgba(255,122,0,0.4); }
-    .btn-download.soon { background: var(--bg3); color: var(--text-dim); border: 1px solid var(--border); box-shadow: none; cursor: default; }
+    .btn-download:hover { background: #e86e00; box-shadow: 0 4px 18px rgba(255,122,0,0.45); }
+
+    /* ── Acordeón "otras versiones" ── */
+    .other-versions { margin-top: 20px; }
+    .other-toggle {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 11px 20px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); cursor: pointer;
+      font-family: inherit; font-size: 12px; font-weight: 600;
+      color: var(--text-dim); transition: border-color 0.15s, color 0.15s;
+    }
+    .other-toggle:hover { border-color: var(--border-mid); color: var(--text); }
+    .other-toggle .arrow { transition: transform 0.25s; display: inline-block; font-style: normal; }
+    .other-toggle.open .arrow { transform: rotate(180deg); }
+
+    .other-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      max-height: 0; overflow: hidden;
+      transition: max-height 0.35s ease, opacity 0.3s ease, margin-top 0.3s;
+      opacity: 0;
+    }
+    .other-grid.open { max-height: 400px; opacity: 1; margin-top: 12px; }
+
+    /* Tarjeta variante (más compacta) */
+    .download-card-alt {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 16px;
+      display: flex; align-items: center; gap: 14px;
+      transition: border-color 0.2s;
+    }
+    .download-card-alt:hover { border-color: var(--border-mid); }
+    .alt-icon { font-size: 24px; flex-shrink: 0; }
+    .alt-body { flex: 1; min-width: 0; text-align: left; }
+    .alt-name { font-size: 13px; font-weight: 700; }
+    .alt-sub  { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+    .btn-download-alt {
+      flex-shrink: 0;
+      font-family: inherit; font-weight: 700; font-size: 11px;
+      padding: 7px 13px; border-radius: 7px; border: none; cursor: pointer;
+      background: var(--bg2); color: var(--text-mid);
+      border: 1px solid var(--border-mid);
+      text-decoration: none; white-space: nowrap;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-download-alt:hover { border-color: var(--orange); color: var(--orange); }
 
     .version-info { text-align: center; margin-top: 28px; font-size: 12px; color: var(--text-dim); }
     .version-info a { color: var(--orange); text-decoration: none; }
@@ -186,9 +197,9 @@
     [data-lang] { display: none; }
     .lang-en [data-lang="en"], .lang-es [data-lang="es"] { display: revert; }
 
-    @media (max-width: 600px) {
+    @media (max-width: 700px) {
+      .download-grid-main, .other-grid { grid-template-columns: 1fr; }
       .app-body { grid-template-columns: 1fr; }
-      .download-row { grid-template-columns: 1fr; }
       .privacy-body { padding: 24px 20px; }
       .nav-links .hide-mobile { display: none; }
     }
@@ -196,6 +207,7 @@
 </head>
 <body class="lang-en">
 
+<!-- ── Nav ── -->
 <nav>
   <div class="wrap nav-inner">
     <a class="nav-brand" href="#">BeHEVC</a>
@@ -226,8 +238,8 @@
       <a href="#downloads" class="btn-hero btn-hero-primary">↓ <span data-lang="en">Download</span><span data-lang="es">Descargar</span></a>
       <a href="#features"  class="btn-hero btn-hero-secondary"><span data-lang="en">Learn more</span><span data-lang="es">Saber más</span></a>
     </div>
-    <p class="hero-note" data-lang="en">macOS · Windows · Linux &nbsp;·&nbsp; Apple Silicon, Intel &amp; ARM &nbsp;·&nbsp; Powered by ffmpeg</p>
-    <p class="hero-note" data-lang="es">macOS · Windows · Linux &nbsp;·&nbsp; Apple Silicon, Intel y ARM &nbsp;·&nbsp; Basado en ffmpeg</p>
+    <p class="hero-note" data-lang="en">macOS · Windows · Linux &nbsp;·&nbsp; Powered by ffmpeg</p>
+    <p class="hero-note" data-lang="es">macOS · Windows · Linux &nbsp;·&nbsp; Basado en ffmpeg</p>
   </div>
 </section>
 
@@ -300,8 +312,8 @@
         <div class="feature-icon">🖥️</div>
         <div class="feature-title" data-lang="en">Truly cross-platform</div>
         <div class="feature-title" data-lang="es">Multiplataforma de verdad</div>
-        <div class="feature-desc" data-lang="en">Native builds for macOS, Windows and Linux — both x86_64 and ARM64 on every platform.</div>
-        <div class="feature-desc" data-lang="es">Builds nativos para macOS, Windows y Linux — tanto x86_64 como ARM64 en cada plataforma.</div>
+        <div class="feature-desc" data-lang="en">Native builds for macOS, Windows and Linux on both x86_64 and ARM64.</div>
+        <div class="feature-desc" data-lang="es">Builds nativos para macOS, Windows y Linux en x86_64 y ARM64.</div>
       </div>
     </div>
   </div>
@@ -316,100 +328,101 @@
     <div class="section-label" data-lang="es">Descargas</div>
     <h2 class="section-title" data-lang="en">Get BeHEVC</h2>
     <h2 class="section-title" data-lang="es">Descarga BeHEVC</h2>
-    <p class="section-sub" data-lang="en">Native builds for every platform and architecture. Always free, no account required.</p>
-    <p class="section-sub" data-lang="es">Builds nativos para cada plataforma y arquitectura. Siempre gratuito, sin cuenta necesaria.</p>
+    <p class="section-sub" data-lang="en">Always free, no account required. ffmpeg included — nothing else to install.</p>
+    <p class="section-sub" data-lang="es">Siempre gratuito, sin cuenta necesaria. ffmpeg incluido — no hay que instalar nada más.</p>
 
-    <!-- Banner autodetección -->
-    <div class="detected-banner" id="detected-banner">
-      <span style="font-size:20px" id="detected-icon"></span>
-      <span id="detected-text-en" data-lang="en">We detected <strong id="detected-name-en"></strong> — <a id="detected-link-en" href="#">download recommended version ↓</a></span>
-      <span id="detected-text-es" data-lang="es">Hemos detectado <strong id="detected-name-es"></strong> — <a id="detected-link-es" href="#">descargar versión recomendada ↓</a></span>
+    <!-- Tarjetas principales -->
+    <div class="download-grid-main">
+
+      <!-- macOS Apple Silicon -->
+      <div class="download-card" id="card-macos-arm">
+        <div class="detected-chip" data-lang="en">Your Mac ✓</div>
+        <div class="detected-chip" data-lang="es">Tu Mac ✓</div>
+        <div class="platform-icon"></div>
+        <div class="platform-name">macOS</div>
+        <div class="platform-arch">Apple Silicon</div>
+        <div class="platform-sub">M1 · M2 · M3 · M4 · M5</div>
+        <a href="downloads/BeHEVC_0.1.0_aarch64.dmg" class="btn-download">
+          <span data-lang="en">Download .dmg</span>
+          <span data-lang="es">Descargar .dmg</span>
+        </a>
+      </div>
+
+      <!-- Windows -->
+      <div class="download-card" id="card-windows">
+        <div class="detected-chip" data-lang="en">Your PC ✓</div>
+        <div class="detected-chip" data-lang="es">Tu PC ✓</div>
+        <div class="platform-icon">🪟</div>
+        <div class="platform-name">Windows</div>
+        <div class="platform-arch">x86_64</div>
+        <div class="platform-sub">Windows 10 / 11</div>
+        <a href="downloads/BeHEVC_0.1.0_x64-setup.exe" class="btn-download">
+          <span data-lang="en">Download .exe</span>
+          <span data-lang="es">Descargar .exe</span>
+        </a>
+      </div>
+
+      <!-- Linux -->
+      <div class="download-card" id="card-linux">
+        <div class="detected-chip" data-lang="en">Your system ✓</div>
+        <div class="detected-chip" data-lang="es">Tu sistema ✓</div>
+        <div class="platform-icon">🐧</div>
+        <div class="platform-name">Linux</div>
+        <div class="platform-arch">x86_64</div>
+        <div class="platform-sub">Ubuntu · Fedora · Debian · Arch</div>
+        <a href="downloads/BeHEVC_0.1.0_amd64.AppImage" class="btn-download">
+          <span data-lang="en">Download .AppImage</span>
+          <span data-lang="es">Descargar .AppImage</span>
+        </a>
+      </div>
+
     </div>
 
-    <!-- macOS -->
-    <div class="download-os-group">
-      <div class="download-os-title">
-        <span class="os-icon"></span> macOS
-      </div>
-      <div class="download-row">
-        <div class="download-card" id="card-macos-arm64">
-          <span class="recommended-chip" data-lang="en">Recommended</span>
-          <span class="recommended-chip" data-lang="es">Recomendado</span>
-          <div class="arch-label">Apple Silicon</div>
-          <div class="arch-sub">M1 · M2 · M3 · M4 (ARM64)</div>
-          <a href="downloads/BeHEVC_0.1.0_aarch64.dmg" class="btn-download">
-            <span data-lang="en">Download .dmg</span><span data-lang="es">Descargar .dmg</span>
-          </a>
-        </div>
-        <div class="download-card" id="card-macos-intel">
-          <span class="recommended-chip" data-lang="en">Recommended</span>
-          <span class="recommended-chip" data-lang="es">Recomendado</span>
-          <div class="arch-label">Intel</div>
-          <div class="arch-sub">Core i5/i7/i9 (x86_64)</div>
-          <a href="downloads/BeHEVC_0.1.0_x64.dmg" class="btn-download">
-            <span data-lang="en">Download .dmg</span><span data-lang="es">Descargar .dmg</span>
-          </a>
-        </div>
-      </div>
-    </div>
+    <!-- Acordeón otras versiones -->
+    <div class="other-versions">
+      <button class="other-toggle" id="other-toggle" onclick="toggleOther()">
+        <i class="arrow">▾</i>
+        <span data-lang="en">Other versions — Intel Mac, Windows ARM, Linux ARM</span>
+        <span data-lang="es">Otras versiones — Mac Intel, Windows ARM, Linux ARM</span>
+      </button>
+      <div class="other-grid" id="other-grid">
 
-    <!-- Windows -->
-    <div class="download-os-group">
-      <div class="download-os-title">
-        <span class="os-icon">🪟</span> Windows
-      </div>
-      <div class="download-row">
-        <div class="download-card" id="card-windows-x64">
-          <span class="recommended-chip" data-lang="en">Recommended</span>
-          <span class="recommended-chip" data-lang="es">Recomendado</span>
-          <div class="arch-label">x86_64</div>
-          <div class="arch-sub">Windows 10 / 11 (most PCs)</div>
-          <a href="downloads/BeHEVC_0.1.0_x64-setup.exe" class="btn-download">
-            <span data-lang="en">Download .exe</span><span data-lang="es">Descargar .exe</span>
-          </a>
+        <!-- macOS Intel -->
+        <div class="download-card-alt" id="card-macos-intel">
+          <span class="alt-icon"></span>
+          <div class="alt-body">
+            <div class="alt-name">macOS Intel</div>
+            <div class="alt-sub">Core i5 / i7 / i9 — x86_64</div>
+          </div>
+          <a href="downloads/BeHEVC_0.1.0_x64.dmg" class="btn-download-alt">.dmg</a>
         </div>
-        <div class="download-card" id="card-windows-arm64">
-          <span class="recommended-chip" data-lang="en">Recommended</span>
-          <span class="recommended-chip" data-lang="es">Recomendado</span>
-          <div class="arch-label">ARM64</div>
-          <div class="arch-sub">Windows 11 on ARM (Snapdragon X)</div>
-          <a href="downloads/BeHEVC_0.1.0_arm64-setup.exe" class="btn-download">
-            <span data-lang="en">Download .exe</span><span data-lang="es">Descargar .exe</span>
-          </a>
-        </div>
-      </div>
-    </div>
 
-    <!-- Linux -->
-    <div class="download-os-group">
-      <div class="download-os-title">
-        <span class="os-icon">🐧</span> Linux
-      </div>
-      <div class="download-row">
-        <div class="download-card" id="card-linux-x64">
-          <span class="recommended-chip" data-lang="en">Recommended</span>
-          <span class="recommended-chip" data-lang="es">Recomendado</span>
-          <div class="arch-label">x86_64</div>
-          <div class="arch-sub">Ubuntu · Fedora · Debian · Arch</div>
-          <a href="downloads/BeHEVC_0.1.0_amd64.AppImage" class="btn-download">
-            <span data-lang="en">Download .AppImage</span><span data-lang="es">Descargar .AppImage</span>
-          </a>
+        <!-- Windows ARM -->
+        <div class="download-card-alt" id="card-windows-arm">
+          <span class="alt-icon">🪟</span>
+          <div class="alt-body">
+            <div class="alt-name">Windows ARM</div>
+            <div class="alt-sub">Snapdragon X · ARM64</div>
+          </div>
+          <a href="downloads/BeHEVC_0.1.0_arm64-setup.exe" class="btn-download-alt">.exe</a>
         </div>
-        <div class="download-card" id="card-linux-arm64">
-          <span class="recommended-chip" data-lang="en">Recommended</span>
-          <span class="recommended-chip" data-lang="es">Recomendado</span>
-          <div class="arch-label">ARM64</div>
-          <div class="arch-sub">Raspberry Pi 5 · AWS Graviton</div>
-          <a href="downloads/BeHEVC_0.1.0_aarch64.AppImage" class="btn-download">
-            <span data-lang="en">Download .AppImage</span><span data-lang="es">Descargar .AppImage</span>
-          </a>
+
+        <!-- Linux ARM -->
+        <div class="download-card-alt" id="card-linux-arm">
+          <span class="alt-icon">🐧</span>
+          <div class="alt-body">
+            <div class="alt-name">Linux ARM</div>
+            <div class="alt-sub">Raspberry Pi 5 · Graviton · ARM64</div>
+          </div>
+          <a href="downloads/BeHEVC_0.1.0_aarch64.AppImage" class="btn-download-alt">.AppImage</a>
         </div>
+
       </div>
     </div>
 
     <p class="version-info">
-      <span data-lang="en">Version <strong>0.1.0</strong> &nbsp;·&nbsp; <a href="version.json">version.json</a> &nbsp;·&nbsp; ffmpeg included</span>
-      <span data-lang="es">Versión <strong>0.1.0</strong> &nbsp;·&nbsp; <a href="version.json">version.json</a> &nbsp;·&nbsp; ffmpeg incluido</span>
+      <span data-lang="en">Version <strong>0.1.0</strong> &nbsp;·&nbsp; <a href="version.json">version.json</a> &nbsp;·&nbsp; <a href="https://github.com/8aws/BeHEVC" target="_blank">GitHub</a></span>
+      <span data-lang="es">Versión <strong>0.1.0</strong> &nbsp;·&nbsp; <a href="version.json">version.json</a> &nbsp;·&nbsp; <a href="https://github.com/8aws/BeHEVC" target="_blank">GitHub</a></span>
     </p>
   </div>
 </section>
@@ -424,27 +437,26 @@
     <h2 class="section-title" data-lang="en">Your files stay yours</h2>
     <h2 class="section-title" data-lang="es">Tus archivos son tuyos</h2>
     <div class="privacy-body">
-      <div class="privacy-chip">✔ <span data-lang="en">100% local processing — no data leaves your computer</span><span data-lang="es">Procesamiento 100% local — ningún dato sale de tu ordenador</span></div>
+      <div class="privacy-chip">✔ <span data-lang="en">100% local — no data leaves your computer</span><span data-lang="es">100% local — ningún dato sale de tu ordenador</span></div>
       <h3 data-lang="en">What BeHEVC does NOT collect</h3>
       <h3 data-lang="es">Qué NO recopila BeHEVC</h3>
-      <p data-lang="en">BeHEVC does not collect, transmit or store any personal data, telemetry, usage statistics or file content. No analytics, no crash reports sent to any server, no account, no registration.</p>
-      <p data-lang="es">BeHEVC no recopila, transmite ni almacena ningún dato personal, telemetría, estadísticas de uso ni contenido de archivos. Sin analíticas, sin informes de errores a ningún servidor, sin cuenta, sin registro.</p>
+      <p data-lang="en">No personal data, telemetry, usage statistics or file content is ever collected, transmitted or stored. No analytics, no crash reports, no account, no registration.</p>
+      <p data-lang="es">Ningún dato personal, telemetría, estadísticas de uso ni contenido de archivos es recopilado, transmitido o almacenado. Sin analíticas, sin informes de errores, sin cuenta, sin registro.</p>
       <h3 data-lang="en">Your video files</h3>
       <h3 data-lang="es">Tus archivos de vídeo</h3>
-      <p data-lang="en">All conversion happens locally on your computer using the bundled ffmpeg binary. Your files are read and written only to the folders you choose. Nothing is uploaded anywhere.</p>
-      <p data-lang="es">Toda la conversión ocurre localmente en tu ordenador usando el binario de ffmpeg incluido. Tus archivos se leen y escriben únicamente en las carpetas que eliges. Nada se sube a ningún sitio.</p>
+      <p data-lang="en">All conversion runs locally using the bundled ffmpeg binary. Files are only read and written to the folders you choose. Nothing is uploaded anywhere.</p>
+      <p data-lang="es">Toda la conversión ocurre localmente usando el binario de ffmpeg incluido. Los archivos solo se leen y escriben en las carpetas que eliges. Nada se sube a ningún sitio.</p>
       <h3 data-lang="en">Update checks</h3>
       <h3 data-lang="es">Comprobación de actualizaciones</h3>
-      <p data-lang="en">Once every 24 hours, BeHEVC makes a single HTTPS request to <code>b265.uverse.es/version.json</code> to check if a newer version is available. This request contains no identifying information.</p>
-      <p data-lang="es">Una vez cada 24 horas, BeHEVC realiza una única petición HTTPS a <code>b265.uverse.es/version.json</code> para comprobar si hay una versión más reciente. Esta petición no contiene información identificativa.</p>
+      <p data-lang="en">Once every 24 hours, a single HTTPS GET is made to <code>b265.uverse.es/version.json</code>. No identifying information is included.</p>
+      <p data-lang="es">Una vez cada 24 horas se realiza un único GET HTTPS a <code>b265.uverse.es/version.json</code>. No se incluye ninguna información identificativa.</p>
       <h3 data-lang="en">Open source</h3>
       <h3 data-lang="es">Código abierto</h3>
-      <p data-lang="en">BeHEVC is open source. You can inspect every line of code and verify that it does exactly what this page says. <a href="https://github.com/8aws/BeHEVC" style="color:var(--orange)">View on GitHub →</a></p>
-      <p data-lang="es">BeHEVC es de código abierto. Puedes inspeccionar cada línea de código y verificar que hace exactamente lo que dice esta página. <a href="https://github.com/8aws/BeHEVC" style="color:var(--orange)">Ver en GitHub →</a></p>
+      <p data-lang="en">Every line of code is public. <a href="https://github.com/8aws/BeHEVC" target="_blank" style="color:var(--orange)">View on GitHub →</a></p>
+      <p data-lang="es">Todo el código es público. <a href="https://github.com/8aws/BeHEVC" target="_blank" style="color:var(--orange)">Ver en GitHub →</a></p>
       <h3 data-lang="en">Contact</h3>
       <h3 data-lang="es">Contacto</h3>
-      <p data-lang="en">Questions about privacy? <a href="mailto:privacy@uverse.es" style="color:var(--orange)">privacy@uverse.es</a></p>
-      <p data-lang="es">¿Preguntas sobre privacidad? <a href="mailto:privacy@uverse.es" style="color:var(--orange)">privacy@uverse.es</a></p>
+      <p><a href="mailto:privacy@uverse.es" style="color:var(--orange)">privacy@uverse.es</a></p>
     </div>
   </div>
 </section>
@@ -454,9 +466,10 @@
     <p>
       <strong style="color:var(--orange)">BeHEVC</strong> &nbsp;·&nbsp;
       <a href="#downloads" data-lang="en">Download</a><a href="#downloads" data-lang="es">Descargar</a> &nbsp;·&nbsp;
-      <a href="#privacy" data-lang="en">Privacy</a><a href="#privacy" data-lang="es">Privacidad</a> &nbsp;·&nbsp;
+      <a href="#privacy"   data-lang="en">Privacy</a><a href="#privacy"   data-lang="es">Privacidad</a> &nbsp;·&nbsp;
       <a href="https://github.com/8aws/BeHEVC" target="_blank" rel="noopener">GitHub</a> &nbsp;·&nbsp;
-      <a href="version.json">version.json</a>
+      <span data-lang="en">Built with <a href="https://tauri.app" target="_blank" rel="noopener">Tauri</a> &amp; ffmpeg</span>
+      <span data-lang="es">Hecho con <a href="https://tauri.app" target="_blank" rel="noopener">Tauri</a> y ffmpeg</span>
     </p>
     <p style="margin-top:8px" data-lang="en">© 2025 uverse.es — All rights reserved</p>
     <p style="margin-top:8px" data-lang="es">© 2025 uverse.es — Todos los derechos reservados</p>
@@ -475,62 +488,82 @@
   if (savedLang === 'es') setLang('es');
   else if (!savedLang && navigator.language?.startsWith('es')) setLang('es');
 
-  // ── Detección de plataforma ─────────────────────────────────────────────
-  function detectPlatform() {
-    const ua  = navigator.userAgent;
-    const mac = /Macintosh|MacIntel|MacPPC|Mac68K/.test(ua);
-    const win = /Win/.test(ua);
-    const lnx = /Linux/.test(ua) && !mac;
+  // ── Acordeón ────────────────────────────────────────────────────────────
+  function toggleOther() {
+    const grid   = document.getElementById('other-grid');
+    const toggle = document.getElementById('other-toggle');
+    const open   = grid.classList.toggle('open');
+    toggle.classList.toggle('open', open);
+  }
 
-    if (mac) {
-      // Detectar Apple Silicon via WebGL renderer
+  // ── Detección de plataforma ─────────────────────────────────────────────
+  // Orden de prioridad:
+  // 1. navigator.userAgentData (API moderna, Chrome/Edge, devuelve arquitectura real)
+  // 2. Análisis del user-agent
+  // 3. Por defecto Mac → Apple Silicon (la mayoría de Macs post-2020)
+
+  function applyDetection(cardId, openOther) {
+    const card = document.getElementById(cardId);
+    if (card) card.classList.add('detected');
+    if (openOther) {
+      // Si la plataforma detectada está en el acordeón, abrirlo
+      const grid   = document.getElementById('other-grid');
+      const toggle = document.getElementById('other-toggle');
+      grid.classList.add('open');
+      toggle.classList.add('open');
+      // Scroll suave hasta la tarjeta después de un momento
+      setTimeout(() => card?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 400);
+    }
+  }
+
+  async function detectAndHighlight() {
+    const ua  = navigator.userAgent;
+    const mac = /Macintosh|Mac OS X/.test(ua);
+    const win = /Windows/.test(ua);
+    const lnx = /Linux/.test(ua) && !mac && !/Android/.test(ua);
+
+    // Intentar userAgentData (Chromium 90+)
+    if (navigator.userAgentData) {
       try {
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (gl) {
-          const ext = gl.getExtension('WEBGL_debug_renderer_info');
-          if (ext) {
-            const renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '';
-            if (/Apple M/.test(renderer)) return 'macos-arm64';
-          }
+        const hints = await navigator.userAgentData.getHighEntropyValues(['architecture', 'platform']);
+        const arch  = (hints.architecture || '').toLowerCase();
+        const plat  = (hints.platform || navigator.userAgentData.platform || '').toLowerCase();
+
+        if (plat.includes('mac') || mac) {
+          // arm = Apple Silicon, x86 = Intel
+          if (arch === 'arm' || arch === 'arm64') applyDetection('card-macos-arm', false);
+          else if (arch === 'x86' || arch === 'x86_64') applyDetection('card-macos-intel', true);
+          else applyDetection('card-macos-arm', false); // por defecto ARM en Mac
+          return;
+        }
+        if (plat.includes('win') || win) {
+          if (arch === 'arm' || arch === 'arm64') applyDetection('card-windows-arm', true);
+          else applyDetection('card-windows', false);
+          return;
+        }
+        if (lnx) {
+          if (arch === 'arm' || arch === 'arm64') applyDetection('card-linux-arm', true);
+          else applyDetection('card-linux', false);
+          return;
         }
       } catch(_) {}
-      return 'macos-intel'; // fallback para Mac
     }
-    if (win) {
-      return /ARM|arm64|aarch64/i.test(ua) ? 'windows-arm64' : 'windows-x64';
+
+    // Fallback: user-agent
+    if (mac) {
+      // En macOS, navigator.platform='MacIntel' incluso en Apple Silicon —
+      // por eso no lo usamos. Defaulteamos a Apple Silicon (mayoritario desde 2021).
+      applyDetection('card-macos-arm', false);
+    } else if (win) {
+      /arm64|arm/i.test(ua) ? applyDetection('card-windows-arm', true)
+                            : applyDetection('card-windows', false);
+    } else if (lnx) {
+      /aarch64|arm64|armv/i.test(ua) ? applyDetection('card-linux-arm', true)
+                                     : applyDetection('card-linux', false);
     }
-    if (lnx) {
-      return /aarch64|arm64/i.test(ua) ? 'linux-arm64' : 'linux-x64';
-    }
-    return null;
   }
 
-  const platformData = {
-    'macos-arm64':   { card: 'card-macos-arm64',   icon: '', nameEn: 'macOS Apple Silicon', nameEs: 'macOS Apple Silicon', link: 'card-macos-arm64' },
-    'macos-intel':   { card: 'card-macos-intel',   icon: '', nameEn: 'macOS Intel',          nameEs: 'macOS Intel',          link: 'card-macos-intel' },
-    'windows-x64':   { card: 'card-windows-x64',   icon: '🪟', nameEn: 'Windows x86_64',    nameEs: 'Windows x86_64',       link: 'card-windows-x64' },
-    'windows-arm64': { card: 'card-windows-arm64', icon: '🪟', nameEn: 'Windows ARM64',      nameEs: 'Windows ARM64',        link: 'card-windows-arm64' },
-    'linux-x64':     { card: 'card-linux-x64',     icon: '🐧', nameEn: 'Linux x86_64',       nameEs: 'Linux x86_64',         link: 'card-linux-x64' },
-    'linux-arm64':   { card: 'card-linux-arm64',   icon: '🐧', nameEn: 'Linux ARM64',         nameEs: 'Linux ARM64',          link: 'card-linux-arm64' },
-  };
-
-  const detected = detectPlatform();
-  if (detected && platformData[detected]) {
-    const p = platformData[detected];
-    const card = document.getElementById(p.card);
-    if (card) card.classList.add('recommended');
-
-    // Banner
-    const banner = document.getElementById('detected-banner');
-    document.getElementById('detected-icon').textContent = p.icon;
-    document.getElementById('detected-name-en').textContent = p.nameEn;
-    document.getElementById('detected-name-es').textContent = p.nameEs;
-    const linkHref = '#' + p.card;
-    document.getElementById('detected-link-en').href = linkHref;
-    document.getElementById('detected-link-es').href = linkHref;
-    banner.classList.add('visible');
-  }
+  detectAndHighlight();
 </script>
 </body>
 </html>
