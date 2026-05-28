@@ -1,7 +1,5 @@
 name: Build BeHEVC
 
-# Se ejecuta al crear un tag v*.*.* (ej: v0.1.0)
-# También se puede lanzar manualmente desde GitHub → Actions → Run workflow
 on:
   push:
     tags:
@@ -14,54 +12,67 @@ env:
 jobs:
   build:
     strategy:
-      fail-fast: false   # si una plataforma falla, las demás siguen
+      fail-fast: false
       matrix:
         include:
-          - platform: macos-latest   # GitHub runner ARM64 (Apple Silicon)
+          # ── macOS ──────────────────────────────────────────────────────────
+          - platform: macos-latest       # ARM runner — build nativo
             target:   aarch64-apple-darwin
             label:    macOS-arm64
+            os:       macos
 
-          - platform: macos-13       # GitHub runner Intel
+          - platform: macos-latest       # ARM runner — cross-compile a Intel
             target:   x86_64-apple-darwin
             label:    macOS-intel
+            os:       macos
 
-          - platform: windows-latest
-            target:   x86_64-pc-windows-msvc
-            label:    Windows-x64
-
+          # ── Linux ──────────────────────────────────────────────────────────
           - platform: ubuntu-22.04
             target:   x86_64-unknown-linux-gnu
             label:    Linux-x64
+            os:       linux
+
+          - platform: ubuntu-24.04-arm   # runner ARM nativo de GitHub
+            target:   aarch64-unknown-linux-gnu
+            label:    Linux-arm64
+            os:       linux
+
+          # ── Windows ────────────────────────────────────────────────────────
+          - platform: windows-latest
+            target:   x86_64-pc-windows-msvc
+            label:    Windows-x64
+            os:       windows
+
+          - platform: windows-11-arm     # runner ARM nativo de GitHub
+            target:   aarch64-pc-windows-msvc
+            label:    Windows-arm64
+            os:       windows
 
     runs-on: ${{ matrix.platform }}
     name: ${{ matrix.label }}
 
     steps:
-      # ── Código fuente ────────────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── Node 20 ──────────────────────────────────────────────────────────
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # ── Rust stable ──────────────────────────────────────────────────────
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      # Cache de compilación Rust (ahorra ~5 min por build)
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: behevc-tauri/src-tauri
 
-      # ── Dependencias del sistema (solo Linux) ────────────────────────────
-      - name: Linux — instalar dependencias WebKitGTK
-        if: matrix.platform == 'ubuntu-22.04'
+      # ── Dependencias Linux ────────────────────────────────────────────────
+      - name: Linux — dependencias WebKitGTK
+        if: matrix.os == 'linux'
         run: |
           sudo apt update
           sudo apt install -y \
@@ -70,10 +81,10 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-      # ── Descargar ffmpeg + ffprobe para cada plataforma ──────────────────
+      # ── Descargar ffmpeg ─────────────────────────────────────────────────
 
-      - name: macOS — descargar ffmpeg + ffprobe (evermeet.cx)
-        if: startsWith(matrix.platform, 'macos')
+      - name: macOS — ffmpeg (evermeet.cx)
+        if: matrix.os == 'macos'
         run: |
           mkdir -p behevc-tauri/src-tauri/resources
           curl -fsSL "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip" -o ffmpeg.zip
@@ -83,21 +94,8 @@ jobs:
           chmod +x behevc-tauri/src-tauri/resources/ffmpeg
           chmod +x behevc-tauri/src-tauri/resources/ffprobe
 
-      - name: Windows — descargar ffmpeg + ffprobe (BtbN/FFmpeg-Builds)
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path "behevc-tauri/src-tauri/resources" | Out-Null
-          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
-          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip -UseBasicParsing
-          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp -Force
-          $bin = (Get-ChildItem ffmpeg_tmp -Directory | Select-Object -First 1).FullName + "\bin"
-          Copy-Item "$bin\ffmpeg.exe"  "behevc-tauri/src-tauri/resources/"
-          Copy-Item "$bin\ffprobe.exe" "behevc-tauri/src-tauri/resources/"
-          Remove-Item ffmpeg.zip, ffmpeg_tmp -Recurse -Force
-
-      - name: Linux — descargar ffmpeg + ffprobe (BtbN/FFmpeg-Builds)
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: Linux x64 — ffmpeg (BtbN)
+        if: matrix.label == 'Linux-x64'
         run: |
           mkdir -p behevc-tauri/src-tauri/resources
           curl -fsSL -L \
@@ -105,13 +103,48 @@ jobs:
             -o ffmpeg.tar.xz
           tar -xf ffmpeg.tar.xz
           DIR=$(find . -maxdepth 1 -name 'ffmpeg-master-latest-linux64-gpl' -type d | head -1)
-          cp "$DIR/bin/ffmpeg"  behevc-tauri/src-tauri/resources/
-          cp "$DIR/bin/ffprobe" behevc-tauri/src-tauri/resources/
-          chmod +x behevc-tauri/src-tauri/resources/ffmpeg
-          chmod +x behevc-tauri/src-tauri/resources/ffprobe
+          cp "$DIR/bin/ffmpeg" "$DIR/bin/ffprobe" behevc-tauri/src-tauri/resources/
+          chmod +x behevc-tauri/src-tauri/resources/ffmpeg behevc-tauri/src-tauri/resources/ffprobe
           rm -rf ffmpeg.tar.xz "$DIR"
 
-      # ── Build ────────────────────────────────────────────────────────────
+      - name: Linux arm64 — ffmpeg (BtbN)
+        if: matrix.label == 'Linux-arm64'
+        run: |
+          mkdir -p behevc-tauri/src-tauri/resources
+          curl -fsSL -L \
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz" \
+            -o ffmpeg.tar.xz
+          tar -xf ffmpeg.tar.xz
+          DIR=$(find . -maxdepth 1 -name 'ffmpeg-master-latest-linuxarm64-gpl' -type d | head -1)
+          cp "$DIR/bin/ffmpeg" "$DIR/bin/ffprobe" behevc-tauri/src-tauri/resources/
+          chmod +x behevc-tauri/src-tauri/resources/ffmpeg behevc-tauri/src-tauri/resources/ffprobe
+          rm -rf ffmpeg.tar.xz "$DIR"
+
+      - name: Windows x64 — ffmpeg (BtbN)
+        if: matrix.label == 'Windows-x64'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "behevc-tauri/src-tauri/resources" | Out-Null
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip -UseBasicParsing
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp -Force
+          $bin = (Get-ChildItem ffmpeg_tmp -Directory | Select-Object -First 1).FullName + "\bin"
+          Copy-Item "$bin\ffmpeg.exe","$bin\ffprobe.exe" "behevc-tauri/src-tauri/resources/"
+          Remove-Item ffmpeg.zip,ffmpeg_tmp -Recurse -Force
+
+      - name: Windows arm64 — ffmpeg (BtbN)
+        if: matrix.label == 'Windows-arm64'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "behevc-tauri/src-tauri/resources" | Out-Null
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-winarm64-gpl.zip"
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip -UseBasicParsing
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp -Force
+          $bin = (Get-ChildItem ffmpeg_tmp -Directory | Select-Object -First 1).FullName + "\bin"
+          Copy-Item "$bin\ffmpeg.exe","$bin\ffprobe.exe" "behevc-tauri/src-tauri/resources/"
+          Remove-Item ffmpeg.zip,ffmpeg_tmp -Recurse -Force
+
+      # ── Build ─────────────────────────────────────────────────────────────
       - name: npm install
         working-directory: behevc-tauri
         run: npm install
@@ -120,19 +153,18 @@ jobs:
         working-directory: behevc-tauri
         run: npm run tauri build -- --target ${{ matrix.target }}
 
-      # ── Subir artefactos ─────────────────────────────────────────────────
-
+      # ── Artefactos ────────────────────────────────────────────────────────
       - name: Upload — macOS DMG
-        if: startsWith(matrix.platform, 'macos')
-        uses: actions/upload-artifact@v4.6.2
+        if: matrix.os == 'macos'
+        uses: actions/upload-artifact@v4
         with:
           name: BeHEVC-${{ matrix.label }}
           path: behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
       - name: Upload — Windows
-        if: matrix.platform == 'windows-latest'
-        uses: actions/upload-artifact@v4.6.2
+        if: matrix.os == 'windows'
+        uses: actions/upload-artifact@v4
         with:
           name: BeHEVC-${{ matrix.label }}
           path: |
@@ -141,8 +173,8 @@ jobs:
           if-no-files-found: error
 
       - name: Upload — Linux AppImage
-        if: matrix.platform == 'ubuntu-22.04'
-        uses: actions/upload-artifact@v4.6.2
+        if: matrix.os == 'linux'
+        uses: actions/upload-artifact@v4
         with:
           name: BeHEVC-${{ matrix.label }}
           path: behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage

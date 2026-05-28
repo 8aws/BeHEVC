@@ -8,6 +8,10 @@ behevc-tauri/src-tauri/resources/ffprobe
 behevc-tauri/src-tauri/resources/ffmpeg.exe
 behevc-tauri/src-tauri/resources/ffprobe.exe
 
+# Binarios ffmpeg del proyecto Swift original
+Resources/ffmpeg
+Resources/ffprobe
+
 # ── Node ──────────────────────────────────────────────────────────────────
 behevc-tauri/node_modules/
 behevc-tauri/package-lock.json
