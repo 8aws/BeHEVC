@@ -1,7 +1,7 @@
 {
   "app": {
     "version": "0.1.1",
-    "release_date": "2026-05-28",
+    "release_date": "2026-05-29",
     "changelog": "Validación de salida mejorada: detecta conversiones truncadas o corruptas comparando tamaño y duración con el original",
     "downloads": {
       "macos_arm64":   "https://b265.uverse.es/downloads/BeHEVC_0.1.1_aarch64.dmg",
