@@ -346,7 +346,7 @@
         <div class="platform-name">macOS</div>
         <div class="platform-arch">Apple Silicon</div>
         <div class="platform-sub">M1 · M2 · M3 · M4 · M5</div>
-        <a href="downloads/BeHEVC_0.1.0_aarch64.dmg" class="btn-download">
+        <a href="#" data-platform="macos_arm64" class="btn-download">
           <span data-lang="en">Download .dmg</span>
           <span data-lang="es">Descargar .dmg</span>
         </a>
@@ -360,7 +360,7 @@
         <div class="platform-name">Windows</div>
         <div class="platform-arch">x86_64</div>
         <div class="platform-sub">Windows 10 / 11</div>
-        <a href="downloads/BeHEVC_0.1.0_x64-setup.exe" class="btn-download">
+        <a href="#" data-platform="windows_x64" class="btn-download">
           <span data-lang="en">Download .exe</span>
           <span data-lang="es">Descargar .exe</span>
         </a>
@@ -374,7 +374,7 @@
         <div class="platform-name">Linux</div>
         <div class="platform-arch">x86_64</div>
         <div class="platform-sub">Ubuntu · Fedora · Debian · Arch</div>
-        <a href="downloads/BeHEVC_0.1.0_amd64.AppImage" class="btn-download">
+        <a href="#" data-platform="linux_x64" class="btn-download">
           <span data-lang="en">Download .AppImage</span>
           <span data-lang="es">Descargar .AppImage</span>
         </a>
@@ -402,7 +402,7 @@
             <div class="alt-name">macOS Intel</div>
             <div class="alt-sub">Core i5 / i7 / i9 — x86_64</div>
           </div>
-          <a href="downloads/BeHEVC_0.1.0_x64.dmg" class="btn-download-alt">.dmg</a>
+          <a href="#" data-platform="macos_intel" class="btn-download-alt">.dmg</a>
         </div>
 
         <!-- Windows ARM -->
@@ -412,7 +412,7 @@
             <div class="alt-name">Windows ARM</div>
             <div class="alt-sub">Snapdragon X · ARM64</div>
           </div>
-          <a href="downloads/BeHEVC_0.1.0_arm64-setup.exe" class="btn-download-alt">.exe</a>
+          <a href="#" data-platform="windows_arm64" class="btn-download-alt">.exe</a>
         </div>
 
         <!-- Linux ARM -->
@@ -422,15 +422,15 @@
             <div class="alt-name">Linux ARM</div>
             <div class="alt-sub">Raspberry Pi 5 · Graviton · ARM64</div>
           </div>
-          <a href="downloads/BeHEVC_0.1.0_aarch64.AppImage" class="btn-download-alt">.AppImage</a>
+          <a href="#" data-platform="linux_arm64" class="btn-download-alt">.AppImage</a>
         </div>
 
       </div>
     </div>
 
     <p class="version-info">
-      <span data-lang="en">Version <strong>0.1.0</strong> &nbsp;·&nbsp; <a href="version.json">version.json</a> &nbsp;·&nbsp; <a href="https://github.com/8aws/BeHEVC" target="_blank">GitHub</a></span>
-      <span data-lang="es">Versión <strong>0.1.0</strong> &nbsp;·&nbsp; <a href="version.json">version.json</a> &nbsp;·&nbsp; <a href="https://github.com/8aws/BeHEVC" target="_blank">GitHub</a></span>
+      <span data-lang="en">Version <strong id="ver-display">…</strong> &nbsp;·&nbsp; <a href="version.json">version.json</a> &nbsp;·&nbsp; <a href="https://github.com/8aws/BeHEVC" target="_blank">GitHub</a></span>
+      <span data-lang="es">Versión <strong id="ver-display-es">…</strong> &nbsp;·&nbsp; <a href="version.json">version.json</a> &nbsp;·&nbsp; <a href="https://github.com/8aws/BeHEVC" target="_blank">GitHub</a></span>
     </p>
   </div>
 </section>
@@ -479,8 +479,8 @@
       <span data-lang="en">Built with <a href="https://tauri.app" target="_blank" rel="noopener">Tauri</a> &amp; ffmpeg</span>
       <span data-lang="es">Hecho con <a href="https://tauri.app" target="_blank" rel="noopener">Tauri</a> y ffmpeg</span>
     </p>
-    <p style="margin-top:8px" data-lang="en">© 2025 uverse.es — All rights reserved</p>
-    <p style="margin-top:8px" data-lang="es">© 2025 uverse.es — Todos los derechos reservados</p>
+    <p style="margin-top:8px" data-lang="en">© 2026 uverse.es — All rights reserved</p>
+    <p style="margin-top:8px" data-lang="es">© 2026 uverse.es — Todos los derechos reservados</p>
   </div>
 </footer>
 
@@ -572,6 +572,33 @@
   }
 
   detectAndHighlight();
+
+  // ── Carga version.json y rellena enlaces de descarga ────────────────────
+  async function loadVersionData() {
+    try {
+      const res  = await fetch('version.json?_=' + Date.now());
+      const data = await res.json();
+      const dl   = data.app.downloads;
+      const ver  = data.app.version;
+
+      // Actualizar todos los botones de descarga
+      document.querySelectorAll('[data-platform]').forEach(el => {
+        const url = dl[el.dataset.platform];
+        if (url) el.href = url;
+      });
+
+      // Mostrar versión en el pie de la sección de descargas
+      ['ver-display', 'ver-display-es'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = ver;
+      });
+    } catch(e) {
+      // Si falla el fetch (desarrollo local sin servidor), no rompemos nada
+      console.warn('version.json no disponible:', e);
+    }
+  }
+
+  loadVersionData();
 </script>
 </body>
 </html>
