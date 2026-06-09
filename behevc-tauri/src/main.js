@@ -6,14 +6,17 @@ const { listen  } = window.__TAURI__.event;
 // ── Estado ───────────────────────────────────────────────────────────────
 
 const state = {
-  files:        [],
-  outputFolder: null,
-  backupFolder: null,
-  ffmpegPath:   null,
-  ffprobePath:  null,
-  isProcessing: false,
-  isScanning:   false,
-  filesDone:    0,
+  files:              [],
+  outputFolder:       null,
+  backupFolder:       null,
+  ffmpegPath:         null,
+  ffprobePath:        null,
+  isProcessing:       false,
+  isScanning:         false,
+  filesDone:          0,
+  quality:            { crf: 28, preset: 'medium' },
+  jobIndexMap:        {},   // jobIdx → fileIdx en state.files
+  lastConvertingIdx:  -1,   // último file_index visto en conversion-progress
 };
 
 // ── DOM ───────────────────────────────────────────────────────────────────
@@ -156,16 +159,29 @@ async function init() {
     if (payload.global_progress >= 0)
       progGlobal.style.width = (payload.global_progress * 100).toFixed(1) + '%';
 
-    if (payload.log) {
+    // ── Actualizar fila en la lista de archivos ──────────────────────────
+    const log = payload.log || '';
+    const trimmed = log.trimStart();
+
+    if (trimmed.startsWith('✔')) {
+      setFileRowStatus(payload.file_index, 'done');
+    } else if (trimmed.startsWith('❌')) {
+      setFileRowStatus(payload.file_index, 'error');
+    } else if (state.lastConvertingIdx !== payload.file_index) {
+      // Nuevo archivo empezando
+      state.lastConvertingIdx = payload.file_index;
+      setFileRowStatus(payload.file_index, 'converting');
+    }
+
+    if (log) {
       // Filtrar líneas de métricas internas de ffmpeg
-      const l = payload.log;
-      const noise = l.startsWith('frame=') || l.startsWith('size=')
-        || l.startsWith('fps=')  || l.startsWith('stream_')
-        || l.startsWith('bitrate=') || l.startsWith('speed=')
-        || l.startsWith('out_time') || l.startsWith('total_size')
-        || l.startsWith('dup_frames') || l.startsWith('drop_frames')
-        || l.startsWith('progress=');
-      if (!noise) appendLog(l);
+      const noise = log.startsWith('frame=') || log.startsWith('size=')
+        || log.startsWith('fps=')  || log.startsWith('stream_')
+        || log.startsWith('bitrate=') || log.startsWith('speed=')
+        || log.startsWith('out_time') || log.startsWith('total_size')
+        || log.startsWith('dup_frames') || log.startsWith('drop_frames')
+        || log.startsWith('progress=');
+      if (!noise) appendLog(log);
     }
   });
 
@@ -236,16 +252,35 @@ btnBackup.addEventListener('click', async () => {
 // ── Iniciar ───────────────────────────────────────────────────────────────
 
 btnStart.addEventListener('click', async () => {
-  const jobs = state.files
-    .filter(f => f.needs_conversion)
-    .map(f => ({ input: f.path, output: f.output_path }));
+  // Construir jobs y mapa jobIdx → fileIdx
+  state.jobIndexMap       = {};
+  state.lastConvertingIdx = -1;
+  state.filesDone         = 0;
+
+  const jobs = [];
+  let jobIdx = 0;
+  state.files.forEach((f, fileIdx) => {
+    if (f.needs_conversion) {
+      jobs.push({ input: f.path, output: f.output_path });
+      state.jobIndexMap[jobIdx] = fileIdx;
+      jobIdx++;
+    }
+  });
   if (!jobs.length) return;
+
+  // Marcar archivos pendientes como "en cola"
+  Object.values(state.jobIndexMap).forEach(fi => {
+    const row = fileListBody.querySelector(`tr[data-file-index="${fi}"]`);
+    if (row) {
+      row.querySelector('.col-status').innerHTML =
+        '<span class="badge badge-queue">En cola…</span>';
+    }
+  });
 
   // Ocultar banner si había uno de sesión anterior
   completionBanner.hidden = true;
 
   state.isProcessing     = true;
-  state.filesDone        = 0;
   progFile.style.width   = '0%';
   progGlobal.style.width = '0%';
   progFile.classList.add('active');
@@ -254,12 +289,13 @@ btnStart.addEventListener('click', async () => {
   btnCancel.hidden       = false;
   updateButtonStates();
 
-  appendLog(`\nIniciando: ${jobs.length} archivo(s)…\n`);
+  const q = state.quality;
+  appendLog(`\nIniciando: ${jobs.length} archivo(s) · CRF ${q.crf} (${q.preset})…\n`);
 
   try {
     await invoke('start_conversion', {
       jobs,
-      settings: { use_hardware: false, crf: 28, preset: 'medium' },
+      settings: { use_hardware: false, crf: q.crf, preset: q.preset },
       ffmpegPath:   state.ffmpegPath,
       ffprobePath:  state.ffprobePath,
       backupFolder: state.backupFolder,
@@ -286,14 +322,15 @@ btnOpenOutput.addEventListener('click', () => {
 });
 
 btnNewSession.addEventListener('click', () => {
-  // Resetear todo
-  state.files        = [];
-  state.filesDone    = 0;
-  completionBanner.hidden  = true;
-  scanStatus.hidden        = true;
-  progFile.style.width     = '0%';
-  progGlobal.style.width   = '0%';
-  logEl.textContent        = '';
+  state.files             = [];
+  state.filesDone         = 0;
+  state.jobIndexMap       = {};
+  state.lastConvertingIdx = -1;
+  completionBanner.hidden = true;
+  scanStatus.hidden       = true;
+  progFile.style.width    = '0%';
+  progGlobal.style.width  = '0%';
+  logEl.textContent       = '';
   renderFileList();
   updateStats();
   updateButtonStates();
@@ -377,9 +414,10 @@ function renderFileList() {
   fileTable.hidden  = false;
   fileListBody.innerHTML = '';
 
-  for (const f of state.files) {
+  state.files.forEach((f, index) => {
     const tr = document.createElement('tr');
-    tr.dataset.path = f.path;
+    tr.dataset.path      = f.path;
+    tr.dataset.fileIndex = index;
     const codec = f.codec || '?';
     const badge = f.needs_conversion
       ? '<span class="badge badge-convert">Convertir</span>'
@@ -389,11 +427,37 @@ function renderFileList() {
       <td class="col-codec">${codec}</td>
       <td class="col-status">${badge}</td>`;
     fileListBody.appendChild(tr);
+  });
+}
+
+// Actualiza el badge de una fila a partir del índice de job (no de archivo)
+function setFileRowStatus(jobIndex, status) {
+  const fileIdx = state.jobIndexMap[jobIndex];
+  if (fileIdx === undefined) return;
+  const row = fileListBody.querySelector(`tr[data-file-index="${fileIdx}"]`);
+  if (!row) return;
+  const cell = row.querySelector('.col-status');
+  if (!cell) return;
+
+  switch (status) {
+    case 'converting':
+      cell.innerHTML = '<span class="badge badge-converting">⟳ Convirtiendo</span>';
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      break;
+    case 'done':
+      cell.innerHTML = '<span class="badge badge-done">✔ Hecho</span>';
+      state.filesDone++;
+      updateStats();
+      break;
+    case 'error':
+      cell.innerHTML = '<span class="badge badge-error">✗ Error</span>';
+      break;
   }
 }
 
 function markAllDone() {
-  fileListBody.querySelectorAll('.badge-convert').forEach(el => {
+  // Solo marcar las que aún no tienen estado final (done/error)
+  fileListBody.querySelectorAll('.badge-convert, .badge-queue, .badge-converting').forEach(el => {
     el.textContent = '✔ Hecho';
     el.className   = 'badge badge-done';
   });
@@ -433,7 +497,7 @@ function recalcOutputPaths() {
 // La comprobación solo se hace una vez cada 24 h para no molestar.
 
 const VERSION_URL         = 'https://b265.uverse.es/version.json';
-const APP_VERSION         = '0.1.0';
+const APP_VERSION         = '0.1.1';
 const UPDATE_CHECK_KEY    = 'behevc_last_update_check';
 const UPDATE_INTERVAL_MS  = 24 * 60 * 60 * 1000; // 24 horas
 
@@ -494,6 +558,17 @@ btnCheckUpdate.addEventListener('click', async () => {
     if (appDataDir) await invoke('open_folder', { path: appDataDir });
     invoke('open_url', { url: 'https://evermeet.cx/ffmpeg/' });
   }
+});
+
+// ── Selector de calidad ───────────────────────────────────────────────────
+
+document.querySelectorAll('.quality-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (state.isProcessing) return;
+    document.querySelectorAll('.quality-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.quality = { crf: parseInt(btn.dataset.crf), preset: btn.dataset.preset };
+  });
 });
 
 // ── Arranque ──────────────────────────────────────────────────────────────

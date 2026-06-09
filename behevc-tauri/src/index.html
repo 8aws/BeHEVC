@@ -85,11 +85,21 @@
       </div>
     </section>
 
+    <!-- ── Calidad ───────────────────────────────────────────────────── -->
+    <div class="quality-row">
+      <span class="quality-label">Calidad</span>
+      <div class="quality-group">
+        <button class="quality-btn" data-crf="22" data-preset="slow">Alta calidad</button>
+        <button class="quality-btn active" data-crf="28" data-preset="medium">Equilibrado</button>
+        <button class="quality-btn" data-crf="34" data-preset="fast">Más compresión</button>
+      </div>
+    </div>
+
     <!-- ── Acciones ──────────────────────────────────────────────────── -->
     <div class="actions">
       <button id="btn-start"  class="btn-primary" disabled>Convertir a HEVC</button>
       <button id="btn-cancel" class="btn-danger"  hidden>Cancelar</button>
-      <span id="all-hevc-notice" hidden>✔ All files are already HEVC — nothing to convert</span>
+      <span id="all-hevc-notice" hidden>✔ Todos los archivos ya son HEVC — nada que convertir</span>
       <span id="start-hint"   hidden></span>
     </div>
 
