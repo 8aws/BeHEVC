@@ -1,6 +1,6 @@
 [package]
 name = "behevc"
-version = "0.1.0"
+version = "2.0.0"
 edition = "2021"
 
 # "cdylib" es necesario para que Tauri pueda cargar la librería en iOS/Android
@@ -19,6 +19,9 @@ tauri = { version = "2", features = [] }
 
 # Plugin para abrir diálogos nativos de archivos/carpetas
 tauri-plugin-dialog = "2"
+
+# Plugin para notificaciones nativas del sistema (aviso al terminar)
+tauri-plugin-notification = "2"
 
 # Serialización JSON (necesario para comunicar datos entre Rust y JS)
 serde = { version = "1", features = ["derive"] }

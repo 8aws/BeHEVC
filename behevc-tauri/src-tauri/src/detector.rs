@@ -32,13 +32,24 @@ pub fn detect_video_codec(path: &Path, ffprobe_path: &str) -> Option<String> {
     }
 }
 
-/// Devuelve true si el archivo YA está en formato HEVC/H.265 (no hay que convertirlo)
-pub fn is_hevc(path: &Path, ffprobe_path: &str) -> bool {
-    match detect_video_codec(path, ffprobe_path) {
-        // ffprobe devuelve "hevc" para H.265/HEVC
-        Some(codec) => codec == "hevc",
-        // Si no podemos detectarlo, asumimos que hay que convertirlo
-        None => false,
+/// Devuelve true si el codec detectado YA es HEVC/H.265 (no hay que convertirlo).
+/// Opera sobre el codec ya detectado para no repetir la llamada a ffprobe.
+/// Si no se pudo detectar (None), asumimos que hay que convertirlo.
+pub fn is_hevc(codec: Option<&str>) -> bool {
+    codec == Some("hevc")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hevc_detection() {
+        assert!(is_hevc(Some("hevc")));
+        assert!(!is_hevc(Some("h264")));
+        assert!(!is_hevc(Some("av1")));
+        // Codec desconocido → conviene convertir (no es HEVC)
+        assert!(!is_hevc(None));
     }
 }
 

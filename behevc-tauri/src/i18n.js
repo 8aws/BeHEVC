@@ -1,0 +1,238 @@
+// i18n.js — internacionalización ES/EN de la UI de BeHEVC
+//
+// Se carga antes que main.js y expone `t`, `setLang`, `applyI18n` y `LANG`
+// como globales. Las cadenas con marcadores usan {nombre} y se sustituyen en t().
+
+const I18N = {
+  es: {
+    // Cabecera
+    tagline:        'Compresión inteligente. Calidad profesional.',
+    loading:        'cargando…',
+    ffmpeg_ready:   '✔ ffmpeg listo',
+    ffmpeg_missing: '✗ ffmpeg no encontrado',
+    update_ffmpeg:  '↑ Actualizar ffmpeg',
+    update_ffmpeg_title: 'Abrir página de descarga de ffmpeg',
+    // Carpetas
+    btn_output:     'Carpeta destino…',
+    btn_add_files:  '+ Añadir vídeos…',
+    btn_add_folder: '+ Añadir carpeta…',
+    btn_backup:     'Carpeta backup…',
+    dest_prefix:    '→ destino: ',
+    backup_prefix:  '🗂 backup: ',
+    // Estadísticas
+    stat_total:     'Total:',
+    stat_convert:   'A convertir:',
+    stat_skip:      'Ya HEVC:',
+    stat_done:      'Hechos:',
+    // Análisis / tabla
+    scanning:       'Analizando…',
+    empty_state:    'Selecciona primero la carpeta de destino, luego añade vídeos',
+    col_name:       'Archivo',
+    col_codec:      'Codec',
+    col_status:     'Estado',
+    col_savings:    'Ahorro',
+    // Progreso
+    prog_file:      'Archivo actual',
+    prog_global:    'Global',
+    // Calidad / codificador / formato / audio / paralelo
+    lbl_quality:    'Calidad',
+    q_high:         'Alta calidad',
+    q_balanced:     'Equilibrado',
+    q_compress:     'Más compresión',
+    lbl_encoder:    'Codificador',
+    enc_software:   'Software',
+    enc_hardware:   'Hardware',
+    lbl_format:     'Formato',
+    lbl_audio:      'Audio',
+    audio_original: 'Original',
+    lbl_parallel:   'Paralelo',
+    par_auto:       'Auto',
+    cpu_hint:       '{cores} núcleos · auto = {auto}',
+    // Acciones
+    btn_start:      'Convertir a HEVC',
+    btn_pause:      'Pausar',
+    btn_pausing:    'Pausando…',
+    btn_cancel:     'Cancelar',
+    btn_processing: 'Procesando…',
+    btn_continue:   'Continuar ({n})',
+    all_hevc:       '✔ Todos los archivos ya son HEVC — nada que convertir',
+    hint_missing:   'Falta: {items}',
+    miss_output:    'carpeta destino',
+    miss_files:     'vídeos',
+    miss_ffmpeg:    'ffmpeg',
+    // Banner de completado
+    completion_title: 'Conversión completada',
+    btn_open_output:  'Abrir destino',
+    btn_new_session:  'Nueva sesión',
+    // Badges
+    badge_convert:    'Convertir',
+    badge_skip:       'Ya HEVC',
+    badge_queue:      'En cola…',
+    badge_converting: 'Convirtiendo',
+    badge_done:       '✔ Hecho',
+    badge_error:      '✗ Error',
+    // Mensajes de log (frontend)
+    log_ff_detected:  '✔ ffmpeg y ffprobe detectados\n',
+    log_ff_version:   '   ffmpeg {ver}\n',
+    log_ff_updatedir: '   Para actualizar ffmpeg: {dir}\n',
+    log_ff_copy:      '⚠ Copia ffmpeg y ffprobe en src-tauri/resources/\n',
+    log_ff_search_err:'Error buscando ffmpeg: {e}\n',
+    log_hw_avail:     '   Aceleración por hardware disponible: {label}\n',
+    log_no_ffprobe:   '⚠ ffprobe no disponible.\n',
+    log_analyzing:    '\nAnalizando…\n',
+    log_analyzed:     '{n} archivos — {a} a convertir, {s} ya HEVC\n',
+    log_error:        'ERROR: {e}\n',
+    log_dest:         'Carpeta destino: {f}\n',
+    log_backup:       'Carpeta backup: {f}\n',
+    log_drop_nodest:  '⚠ Selecciona primero la carpeta de destino antes de soltar archivos.\n',
+    log_starting:     '\nIniciando: {n} archivo(s) · CRF {crf} ({preset}) · {enc}…\n',
+    log_continuing:   '\nContinuando: {n} archivo(s) · CRF {crf} ({preset}) · {enc}…\n',
+    log_start_fail:   '\n❌ No se pudo iniciar la conversión:\n{e}\n',
+    log_pausing:      '\n⏸ Pausando: terminando las conversiones activas, sin arrancar las pendientes…\n',
+    log_paused:       '\n⏸ Pausado. Quedan {n} archivo(s). Ajusta opciones si quieres y pulsa Continuar.\n',
+    log_cancelling:   '\nCancelando…\n',
+    log_cancelled:    '\n⛔ Conversión cancelada.\n',
+    log_unexpected:   '\n⚠ La conversión terminó con un error inesperado.\n',
+    log_cleared:      'Lista limpiada. Lista para nueva sesión.\n',
+    enc_sw_word:      'software',
+    enc_hw_word:      'hardware',
+    // Banner (líneas)
+    sum_converted:    '📁 Convertidos ({n}) → {dir}',
+    sum_savings:      '💾 Ahorro total: {orig} → {out} (−{pct}%)',
+    sum_backup:       '🗂  Originales convertidos → {dir}',
+    sum_skipped:      '⏭  Ya eran HEVC ({n}) → intactos en ubicación original',
+    sum_errors:       '❌ Con errores ({n}) → intactos en ubicación original',
+    sum_complete:     '✅ Proceso completo',
+    // Actualizaciones
+    upd_app:          '\n💡 Nueva versión de BeHEVC disponible: {latest} (instalada: {current})\n',
+    upd_app_dl:       '   Descárgala en https://b265.uverse.es\n',
+    upd_ffmpeg:       '\n💡 Nueva versión de ffmpeg recomendada: {latest} (instalada: {current})\n',
+    // Notificación
+    notif_title:      'BeHEVC — conversión completada',
+    notif_body:       '{n} archivo(s) convertido(s)',
+    notif_savings:    ' · ahorro −{pct}%',
+  },
+
+  en: {
+    tagline:        'Smart compression. Professional quality.',
+    loading:        'loading…',
+    ffmpeg_ready:   '✔ ffmpeg ready',
+    ffmpeg_missing: '✗ ffmpeg not found',
+    update_ffmpeg:  '↑ Update ffmpeg',
+    update_ffmpeg_title: 'Open ffmpeg download page',
+    btn_output:     'Output folder…',
+    btn_add_files:  '+ Add videos…',
+    btn_add_folder: '+ Add folder…',
+    btn_backup:     'Backup folder…',
+    dest_prefix:    '→ output: ',
+    backup_prefix:  '🗂 backup: ',
+    stat_total:     'Total:',
+    stat_convert:   'To convert:',
+    stat_skip:      'Already HEVC:',
+    stat_done:      'Done:',
+    scanning:       'Analyzing…',
+    empty_state:    'First choose the output folder, then add videos',
+    col_name:       'File',
+    col_codec:      'Codec',
+    col_status:     'Status',
+    col_savings:    'Savings',
+    prog_file:      'Current file',
+    prog_global:    'Overall',
+    lbl_quality:    'Quality',
+    q_high:         'High quality',
+    q_balanced:     'Balanced',
+    q_compress:     'More compression',
+    lbl_encoder:    'Encoder',
+    enc_software:   'Software',
+    enc_hardware:   'Hardware',
+    lbl_format:     'Format',
+    lbl_audio:      'Audio',
+    audio_original: 'Original',
+    lbl_parallel:   'Parallel',
+    par_auto:       'Auto',
+    cpu_hint:       '{cores} cores · auto = {auto}',
+    btn_start:      'Convert to HEVC',
+    btn_pause:      'Pause',
+    btn_pausing:    'Pausing…',
+    btn_cancel:     'Cancel',
+    btn_processing: 'Processing…',
+    btn_continue:   'Continue ({n})',
+    all_hevc:       '✔ All files are already HEVC — nothing to convert',
+    hint_missing:   'Missing: {items}',
+    miss_output:    'output folder',
+    miss_files:     'videos',
+    miss_ffmpeg:    'ffmpeg',
+    completion_title: 'Conversion complete',
+    btn_open_output:  'Open output',
+    btn_new_session:  'New session',
+    badge_convert:    'Convert',
+    badge_skip:       'Already HEVC',
+    badge_queue:      'Queued…',
+    badge_converting: 'Converting',
+    badge_done:       '✔ Done',
+    badge_error:      '✗ Error',
+    log_ff_detected:  '✔ ffmpeg and ffprobe detected\n',
+    log_ff_version:   '   ffmpeg {ver}\n',
+    log_ff_updatedir: '   To update ffmpeg: {dir}\n',
+    log_ff_copy:      '⚠ Copy ffmpeg and ffprobe into src-tauri/resources/\n',
+    log_ff_search_err:'Error looking for ffmpeg: {e}\n',
+    log_hw_avail:     '   Hardware acceleration available: {label}\n',
+    log_no_ffprobe:   '⚠ ffprobe not available.\n',
+    log_analyzing:    '\nAnalyzing…\n',
+    log_analyzed:     '{n} files — {a} to convert, {s} already HEVC\n',
+    log_error:        'ERROR: {e}\n',
+    log_dest:         'Output folder: {f}\n',
+    log_backup:       'Backup folder: {f}\n',
+    log_drop_nodest:  '⚠ Choose the output folder before dropping files.\n',
+    log_starting:     '\nStarting: {n} file(s) · CRF {crf} ({preset}) · {enc}…\n',
+    log_continuing:   '\nResuming: {n} file(s) · CRF {crf} ({preset}) · {enc}…\n',
+    log_start_fail:   '\n❌ Could not start the conversion:\n{e}\n',
+    log_pausing:      '\n⏸ Pausing: finishing active conversions, not starting the pending ones…\n',
+    log_paused:       '\n⏸ Paused. {n} file(s) left. Adjust options if you want and press Continue.\n',
+    log_cancelling:   '\nCancelling…\n',
+    log_cancelled:    '\n⛔ Conversion cancelled.\n',
+    log_unexpected:   '\n⚠ The conversion ended with an unexpected error.\n',
+    log_cleared:      'List cleared. Ready for a new session.\n',
+    enc_sw_word:      'software',
+    enc_hw_word:      'hardware',
+    sum_converted:    '📁 Converted ({n}) → {dir}',
+    sum_savings:      '💾 Total savings: {orig} → {out} (−{pct}%)',
+    sum_backup:       '🗂  Converted originals → {dir}',
+    sum_skipped:      '⏭  Already HEVC ({n}) → left in their original location',
+    sum_errors:       '❌ With errors ({n}) → left in their original location',
+    sum_complete:     '✅ Process complete',
+    upd_app:          '\n💡 New BeHEVC version available: {latest} (installed: {current})\n',
+    upd_app_dl:       '   Download it at https://b265.uverse.es\n',
+    upd_ffmpeg:       '\n💡 New recommended ffmpeg version: {latest} (installed: {current})\n',
+    notif_title:      'BeHEVC — conversion complete',
+    notif_body:       '{n} file(s) converted',
+    notif_savings:    ' · savings −{pct}%',
+  },
+};
+
+let LANG = 'es';
+
+/// Traduce una clave, sustituyendo {marcadores} con `vars`.
+function t(key, vars) {
+  let s = (I18N[LANG] && I18N[LANG][key]) ?? I18N.es[key] ?? key;
+  if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
+  return s;
+}
+
+/// Fija el idioma activo (cae a 'es' si no existe).
+function setLang(l) { LANG = I18N[l] ? l : 'es'; }
+
+/// Aplica las traducciones a todos los elementos marcados con data-i18n / data-i18n-title.
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+  document.documentElement.lang = LANG;
+  // Marcar el botón de idioma activo
+  document.querySelectorAll('.lang-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.lang === LANG);
+  });
+}

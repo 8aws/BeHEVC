@@ -12,23 +12,27 @@
     <!-- ── Cabecera ─────────────────────────────────────────────────── -->
     <header>
       <div class="brand">
-        <h1>BeHEVC</h1>
-        <p>Compresión inteligente. Calidad profesional.</p>
+        <h1>BeHEVC <span id="app-version" class="app-version"></span></h1>
+        <p data-i18n="tagline">Compresión inteligente. Calidad profesional.</p>
       </div>
       <div class="header-badges">
-        <span id="ffmpeg-status">cargando…</span>
+        <div class="lang-toggle">
+          <button class="lang-btn" data-lang="es">ES</button>
+          <button class="lang-btn" data-lang="en">EN</button>
+        </div>
+        <span id="ffmpeg-status" data-i18n="loading">cargando…</span>
         <span id="ffmpeg-version" hidden></span>
-        <button id="btn-check-update" class="btn-update" hidden title="Abrir página de descarga de ffmpeg">↑ Actualizar ffmpeg</button>
+        <button id="btn-check-update" class="btn-update" hidden data-i18n="update_ffmpeg" data-i18n-title="update_ffmpeg_title" title="Abrir página de descarga de ffmpeg">↑ Actualizar ffmpeg</button>
       </div>
     </header>
 
     <!-- ── Carpetas ─────────────────────────────────────────────────── -->
     <section class="folders">
       <div class="folder-row">
-        <button id="btn-output"      class="btn-outline">Carpeta destino…</button>
-        <button id="btn-add-files"   class="btn-outline">+ Añadir vídeos…</button>
-        <button id="btn-add-folder"  class="btn-outline">+ Añadir carpeta…</button>
-        <button id="btn-backup"      class="btn-outline">Carpeta backup…</button>
+        <button id="btn-output"      class="btn-outline" data-i18n="btn_output">Carpeta destino…</button>
+        <button id="btn-add-files"   class="btn-outline" data-i18n="btn_add_files">+ Añadir vídeos…</button>
+        <button id="btn-add-folder"  class="btn-outline" data-i18n="btn_add_folder">+ Añadir carpeta…</button>
+        <button id="btn-backup"      class="btn-outline" data-i18n="btn_backup">Carpeta backup…</button>
       </div>
       <div class="folder-info">
         <span id="output-path"  class="path-label"></span>
@@ -39,7 +43,7 @@
     <!-- ── Progreso de análisis ──────────────────────────────────────── -->
     <div id="scan-status" hidden>
       <div class="scan-row">
-        <span id="scan-label" class="scan-label">Analizando…</span>
+        <span id="scan-label" class="scan-label" data-i18n="scanning">Analizando…</span>
         <div class="progress-bar scan-bar">
           <div class="progress-fill" id="prog-scan"></div>
         </div>
@@ -49,24 +53,25 @@
 
     <!-- ── Estadísticas ─────────────────────────────────────────────── -->
     <div class="stats" id="stats" hidden>
-      <span class="stat-item">Total: <strong id="stat-total">0</strong></span>
-      <span class="stat-item orange">A convertir: <strong id="stat-convert">0</strong></span>
-      <span class="stat-item dim">Ya HEVC: <strong id="stat-skip">0</strong></span>
-      <span class="stat-item green">Hechos: <strong id="stat-done">0</strong></span>
+      <span class="stat-item"><span data-i18n="stat_total">Total:</span> <strong id="stat-total">0</strong></span>
+      <span class="stat-item orange"><span data-i18n="stat_convert">A convertir:</span> <strong id="stat-convert">0</strong></span>
+      <span class="stat-item dim"><span data-i18n="stat_skip">Ya HEVC:</span> <strong id="stat-skip">0</strong></span>
+      <span class="stat-item green"><span data-i18n="stat_done">Hechos:</span> <strong id="stat-done">0</strong></span>
     </div>
 
     <!-- ── Lista de archivos ─────────────────────────────────────────── -->
     <div class="file-list-wrapper" id="file-list-wrapper">
       <div class="empty-state" id="empty-state">
         <span>🎬</span>
-        Selecciona primero la carpeta de destino, luego añade vídeos
+        <span data-i18n="empty_state">Selecciona primero la carpeta de destino, luego añade vídeos</span>
       </div>
       <table class="file-list" id="file-table" hidden>
         <thead>
           <tr>
-            <th class="col-name">Archivo</th>
-            <th class="col-codec">Codec</th>
-            <th class="col-status">Estado</th>
+            <th class="col-name" data-i18n="col_name">Archivo</th>
+            <th class="col-codec" data-i18n="col_codec">Codec</th>
+            <th class="col-status" data-i18n="col_status">Estado</th>
+            <th class="col-savings" data-i18n="col_savings">Ahorro</th>
           </tr>
         </thead>
         <tbody id="file-list-body"></tbody>
@@ -76,30 +81,59 @@
     <!-- ── Progreso de conversión ────────────────────────────────────── -->
     <section class="progress-section">
       <div class="progress-row">
-        <label>Archivo actual</label>
+        <label data-i18n="prog_file">Archivo actual</label>
         <div class="progress-bar"><div class="progress-fill" id="prog-file"></div></div>
+        <span id="file-meta" class="file-meta"></span>
       </div>
       <div class="progress-row">
-        <label>Global</label>
+        <label data-i18n="prog_global">Global</label>
         <div class="progress-bar"><div class="progress-fill" id="prog-global"></div></div>
       </div>
     </section>
 
-    <!-- ── Calidad ───────────────────────────────────────────────────── -->
+    <!-- ── Calidad + Codificador ──────────────────────────────────────── -->
     <div class="quality-row">
-      <span class="quality-label">Calidad</span>
+      <span class="quality-label" data-i18n="lbl_quality">Calidad</span>
       <div class="quality-group">
-        <button class="quality-btn" data-crf="22" data-preset="slow">Alta calidad</button>
-        <button class="quality-btn active" data-crf="28" data-preset="medium">Equilibrado</button>
-        <button class="quality-btn" data-crf="34" data-preset="fast">Más compresión</button>
+        <button class="quality-btn" data-crf="22" data-preset="slow" data-i18n="q_high">Alta calidad</button>
+        <button class="quality-btn active" data-crf="28" data-preset="medium" data-i18n="q_balanced">Equilibrado</button>
+        <button class="quality-btn" data-crf="34" data-preset="fast" data-i18n="q_compress">Más compresión</button>
       </div>
+      <span class="quality-label sep-label" data-i18n="lbl_encoder">Codificador</span>
+      <div class="quality-group" id="encoder-group">
+        <button class="encoder-btn active" data-encoder="libx265" data-i18n="enc_software">Software</button>
+        <!-- El botón Hardware se inyecta en runtime si hay aceleración -->
+      </div>
+    </div>
+
+    <!-- ── Formato + Audio + Paralelo ─────────────────────────────────── -->
+    <div class="quality-row">
+      <span class="quality-label" data-i18n="lbl_format">Formato</span>
+      <div class="quality-group" id="container-group">
+        <button class="opt-btn active" data-container="mkv">MKV</button>
+        <button class="opt-btn" data-container="mp4">MP4</button>
+      </div>
+      <span class="quality-label sep-label" data-i18n="lbl_audio">Audio</span>
+      <div class="quality-group" id="audio-group">
+        <button class="opt-btn active" data-audio="copy" data-i18n="audio_original">Original</button>
+        <button class="opt-btn" data-audio="aac">AAC</button>
+      </div>
+      <span class="quality-label sep-label" data-i18n="lbl_parallel">Paralelo</span>
+      <div class="quality-group" id="concurrency-group">
+        <button class="opt-btn active" data-concurrency="auto" data-i18n="par_auto">Auto</button>
+        <button class="opt-btn" data-concurrency="1">1</button>
+        <button class="opt-btn" data-concurrency="2">2</button>
+        <button class="opt-btn" data-concurrency="4">4</button>
+      </div>
+      <span class="cpu-hint" id="cpu-hint"></span>
     </div>
 
     <!-- ── Acciones ──────────────────────────────────────────────────── -->
     <div class="actions">
-      <button id="btn-start"  class="btn-primary" disabled>Convertir a HEVC</button>
-      <button id="btn-cancel" class="btn-danger"  hidden>Cancelar</button>
-      <span id="all-hevc-notice" hidden>✔ Todos los archivos ya son HEVC — nada que convertir</span>
+      <button id="btn-start"  class="btn-primary" disabled data-i18n="btn_start">Convertir a HEVC</button>
+      <button id="btn-pause"  class="btn-outline" hidden data-i18n="btn_pause">Pausar</button>
+      <button id="btn-cancel" class="btn-danger"  hidden data-i18n="btn_cancel">Cancelar</button>
+      <span id="all-hevc-notice" hidden data-i18n="all_hevc">✔ Todos los archivos ya son HEVC — nada que convertir</span>
       <span id="start-hint"   hidden></span>
     </div>
 
@@ -107,12 +141,12 @@
     <div id="completion-banner" hidden>
       <div class="completion-icon">✅</div>
       <div class="completion-body">
-        <div class="completion-title">Conversión completada</div>
+        <div class="completion-title" data-i18n="completion_title">Conversión completada</div>
         <div id="completion-summary" class="completion-summary"></div>
       </div>
       <div class="completion-actions">
-        <button id="btn-open-output" class="btn-completion-primary">Abrir destino</button>
-        <button id="btn-new-session" class="btn-completion-secondary">Nueva sesión</button>
+        <button id="btn-open-output" class="btn-completion-primary" data-i18n="btn_open_output">Abrir destino</button>
+        <button id="btn-new-session" class="btn-completion-secondary" data-i18n="btn_new_session">Nueva sesión</button>
       </div>
     </div>
 
@@ -122,6 +156,7 @@
     </div>
 
   </div>
+  <script src="i18n.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

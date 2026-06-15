@@ -46,3 +46,22 @@ fn is_video_file(path: &Path) -> bool {
         .map(|ext| VIDEO_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
         .unwrap_or(false)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recognises_video_extensions_case_insensitive() {
+        assert!(is_video_file(Path::new("pelicula.mp4")));
+        assert!(is_video_file(Path::new("video.MKV")));
+        assert!(is_video_file(Path::new("clip.MoV")));
+    }
+
+    #[test]
+    fn rejects_non_video_files() {
+        assert!(!is_video_file(Path::new("documento.pdf")));
+        assert!(!is_video_file(Path::new("imagen.jpg")));
+        assert!(!is_video_file(Path::new("sin_extension")));
+    }
+}

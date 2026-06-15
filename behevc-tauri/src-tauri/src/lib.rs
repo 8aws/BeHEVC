@@ -22,14 +22,19 @@ use converter::{ConversionJob, ConversionSettings};
 
 /// Estado compartido entre el hilo principal y el hilo de conversión
 pub struct AppState {
-    /// Flag de cancelación: cuando se pone a true, el converter para
+    /// Flag de cancelación: cuando se pone a true, el converter para de inmediato
+    /// (mata el ffmpeg en curso y descarta el archivo a medias).
     pub cancelled: Arc<Mutex<bool>>,
+    /// Flag de pausa: los workers terminan el archivo activo pero NO toman más
+    /// trabajos de la cola. Los archivos en curso NO se cortan.
+    pub paused: Arc<Mutex<bool>>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             cancelled: Arc::new(Mutex::new(false)),
+            paused: Arc::new(Mutex::new(false)),
         }
     }
 }
@@ -88,6 +93,29 @@ fn get_ffmpeg_paths(app: AppHandle) -> (Option<String>, Option<String>) {
 fn get_app_data_dir(app: AppHandle) -> Option<String> {
     app.path().app_data_dir().ok()
         .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Devuelve la versión de la app tomada del bundle (Cargo.toml / tauri.conf.json).
+/// Fuente única de verdad: evita versiones hardcodeadas en el frontend.
+#[tauri::command]
+fn get_app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+/// Nº de conversiones simultáneas por defecto: la mitad de los núcleos lógicos,
+/// mínimo 1. La codificación de vídeo ya usa muchos hilos, así que no conviene
+/// lanzar tantas conversiones como núcleos.
+fn default_concurrency() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| (n.get() / 2).max(1))
+        .unwrap_or(1)
+}
+
+/// Núcleos lógicos del sistema y concurrencia recomendada (para la UI).
+#[tauri::command]
+fn get_cpu_info() -> (usize, usize) {
+    let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    (cores, default_concurrency())
 }
 
 /// Busca un binario (con o sin .exe en Windows) en un directorio
@@ -167,7 +195,9 @@ async fn scan_files(
     paths: Vec<String>,
     output_folder: String,
     ffprobe_path: String,
+    container: Option<String>,
 ) -> Vec<FileInfo> {
+    let container = container.unwrap_or_else(|| "mkv".to_string());
     tokio::task::spawn_blocking(move || {
         let output_dir = PathBuf::from(&output_folder);
         let mut results: Vec<FileInfo> = Vec::new();
@@ -187,12 +217,13 @@ async fn scan_files(
                 file: file.file_name().and_then(|n| n.to_str()).unwrap_or("?").to_string(),
             });
 
-            // Preguntamos a ffprobe qué codec tiene
+            // Preguntamos a ffprobe qué codec tiene (una sola llamada);
+            // "ya es HEVC" se deriva del codec detectado.
             let codec = detector::detect_video_codec(&file, &ffprobe_path);
-            let already_hevc = detector::is_hevc(&file, &ffprobe_path);
+            let already_hevc = detector::is_hevc(codec.as_deref());
 
             let stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
-            let output_name = format!("{}.hevc.mkv", stem);
+            let output_name = format!("{}.hevc.{}", stem, container);
             let output_path = output_dir.join(&output_name);
 
             results.push(FileInfo {
@@ -221,17 +252,40 @@ async fn start_conversion(
     ffmpeg_path: String,
     ffprobe_path: String,
     backup_folder: Option<String>,
+    concurrency: Option<usize>,
 ) -> Result<(), String> {
     // Resetear el flag de cancelación
     *state.cancelled.lock().unwrap() = false;
+    *state.paused.lock().unwrap() = false;
 
-    // Clonar el Arc para pasarlo al hilo de conversión
+    // Nº de conversiones en paralelo. Por defecto: la mitad de los núcleos
+    // (la codificación de vídeo ya es muy multihilo), mínimo 1.
+    let concurrency = concurrency.unwrap_or_else(default_concurrency).max(1);
+
+    // Clonar los Arc para pasarlos al hilo de conversión
     let cancelled = Arc::clone(&state.cancelled);
+    let paused    = Arc::clone(&state.paused);
 
-    // Crear la carpeta de destino si no existe
-    if let Some(output_dir) = jobs.first().map(|j| Path::new(&j.output).parent()) {
-        if let Some(dir) = output_dir {
-            let _ = std::fs::create_dir_all(dir);
+    // Validar/crear la carpeta de destino ANTES de arrancar.
+    // Tras reinicios o con discos externos/red desmontados, una carpeta recordada
+    // puede ya no existir: damos un error claro en vez de un fallo críptico de ffmpeg.
+    if let Some(dir) = jobs.first().and_then(|j| Path::new(&j.output).parent()) {
+        if let Err(e) = std::fs::create_dir_all(dir) {
+            return Err(format!(
+                "No se puede acceder a la carpeta de destino:\n{}\n\n{}\n\n¿Está el disco conectado/montado?",
+                dir.display(), e
+            ));
+        }
+        // Comprobar que realmente se puede escribir (solo lectura, red, permisos…)
+        let probe = dir.join(".behevc_write_test");
+        match std::fs::File::create(&probe) {
+            Ok(_) => { let _ = std::fs::remove_file(&probe); }
+            Err(e) => {
+                return Err(format!(
+                    "La carpeta de destino no permite escritura:\n{}\n\n{}",
+                    dir.display(), e
+                ));
+            }
         }
     }
 
@@ -251,6 +305,8 @@ async fn start_conversion(
                 ffmpeg_path,
                 ffprobe_path,
                 cancelled,
+                paused,
+                concurrency,
             )
         }));
 
@@ -301,9 +357,17 @@ async fn start_conversion(
 }
 
 /// Señala al hilo de conversión que debe parar lo antes posible
+/// (mata el ffmpeg en curso y descarta el archivo a medias).
 #[tauri::command]
 fn cancel_conversion(state: State<'_, AppState>) {
     *state.cancelled.lock().unwrap() = true;
+}
+
+/// Pausa elegante: los workers terminan el archivo activo pero no toman más
+/// trabajos de la cola. Las conversiones en curso NO se cortan.
+#[tauri::command]
+fn pause_conversion(state: State<'_, AppState>) {
+    *state.paused.lock().unwrap() = true;
 }
 
 /// Abre una carpeta en el explorador de archivos nativo del sistema
@@ -338,6 +402,50 @@ fn get_ffmpeg_version(ffmpeg_path: String) -> Option<String> {
     Some(version.to_string())
 }
 
+/// Información de un encoder de hardware disponible, enviada al frontend.
+#[derive(Debug, Clone, Serialize)]
+pub struct HwEncoder {
+    /// Id del encoder para ffmpeg (ej: "hevc_videotoolbox")
+    pub id: String,
+    /// Etiqueta legible para la UI (ej: "Apple VideoToolbox")
+    pub label: String,
+}
+
+/// Lista los encoders HEVC de hardware disponibles en el binario de ffmpeg.
+///
+/// Ejecuta `ffmpeg -encoders` y comprueba qué encoders de hardware están
+/// compilados. Nota: que el encoder exista en el binario no garantiza que la
+/// GPU/driver esté presente en la máquina; si falla en tiempo de conversión,
+/// el reintento degrada a software automáticamente.
+#[tauri::command]
+fn list_hw_encoders(ffmpeg_path: String) -> Vec<HwEncoder> {
+    let output = match std::process::Command::new(&ffmpeg_path)
+        .args(["-hide_banner", "-encoders"])
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => return Vec::new(),
+    };
+
+    let text = String::from_utf8_lossy(&output.stdout);
+
+    // (id de ffmpeg, etiqueta para la UI) — solo se ofrecen los presentes
+    // y que tengan sentido en la plataforma actual.
+    let candidates: &[(&str, &str)] = &[
+        ("hevc_videotoolbox", "Apple VideoToolbox"),
+        ("hevc_nvenc",        "NVIDIA NVENC"),
+        ("hevc_qsv",          "Intel Quick Sync"),
+        ("hevc_amf",          "AMD AMF"),
+        ("hevc_vaapi",        "VAAPI (Linux)"),
+    ];
+
+    candidates
+        .iter()
+        .filter(|(id, _)| text.contains(id))
+        .map(|(id, label)| HwEncoder { id: id.to_string(), label: label.to_string() })
+        .collect()
+}
+
 /// Abre una URL en el navegador por defecto del sistema operativo
 #[tauri::command]
 fn open_url(url: String) {
@@ -359,18 +467,23 @@ pub fn run() {
         .manage(AppState::default())
         // Registrar plugins
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         // Registrar todos los commands que el JS puede llamar
         .invoke_handler(tauri::generate_handler![
             get_ffmpeg_paths,
             get_ffmpeg_version,
             get_app_data_dir,
+            get_app_version,
+            get_cpu_info,
             pick_video_files,
             pick_folder,
             scan_files,
             start_conversion,
             cancel_conversion,
+            pause_conversion,
             open_folder,
             open_url,
+            list_hw_encoders,
         ])
         .run(tauri::generate_context!())
         .expect("Error arrancando BeHEVC");

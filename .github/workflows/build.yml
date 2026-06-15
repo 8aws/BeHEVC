@@ -51,6 +51,17 @@ jobs:
     runs-on: ${{ matrix.platform }}
     name: ${{ matrix.label }}
 
+    # Exponer los secrets como env para poder condicionar pasos con `if: env.X != ''`.
+    # Si un secret no está configurado, ese paso se salta y el build sale sin firmar.
+    env:
+      APPLE_CERTIFICATE:          ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY:     ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID:                   ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD:             ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID:              ${{ secrets.APPLE_TEAM_ID }}
+      KEYCHAIN_PASSWORD:          ${{ secrets.KEYCHAIN_PASSWORD }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -83,16 +94,60 @@ jobs:
 
       # ── Descargar ffmpeg ─────────────────────────────────────────────────
 
-      - name: macOS — ffmpeg (evermeet.cx)
-        if: matrix.os == 'macos'
+      # ffmpeg POR ARQUITECTURA (martin-riedl.de — builds nativos, firmados y
+      # notarizados). Antes ambos targets macOS usaban evermeet.cx (solo Intel),
+      # con lo que el DMG arm64 acababa con un ffmpeg x86_64 corriendo en Rosetta.
+      - name: macOS arm64 — ffmpeg (nativo arm64)
+        if: matrix.label == 'macOS-arm64'
         run: |
           mkdir -p behevc-tauri/src-tauri/resources
-          curl -fsSL "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip" -o ffmpeg.zip
-          unzip -j ffmpeg.zip -d behevc-tauri/src-tauri/resources && rm ffmpeg.zip
-          curl -fsSL "https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip" -o ffprobe.zip
+          base="https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release"
+          curl -fsSL -L "$base/ffmpeg.zip"  -o ffmpeg.zip
+          unzip -j ffmpeg.zip  -d behevc-tauri/src-tauri/resources && rm ffmpeg.zip
+          curl -fsSL -L "$base/ffprobe.zip" -o ffprobe.zip
           unzip -j ffprobe.zip -d behevc-tauri/src-tauri/resources && rm ffprobe.zip
-          chmod +x behevc-tauri/src-tauri/resources/ffmpeg
-          chmod +x behevc-tauri/src-tauri/resources/ffprobe
+          chmod +x behevc-tauri/src-tauri/resources/ffmpeg behevc-tauri/src-tauri/resources/ffprobe
+          file behevc-tauri/src-tauri/resources/ffmpeg | grep -q arm64 || (echo "ffmpeg no es arm64" && exit 1)
+
+      - name: macOS Intel — ffmpeg (nativo x86_64)
+        if: matrix.label == 'macOS-intel'
+        run: |
+          mkdir -p behevc-tauri/src-tauri/resources
+          base="https://ffmpeg.martin-riedl.de/redirect/latest/macos/amd64/release"
+          curl -fsSL -L "$base/ffmpeg.zip"  -o ffmpeg.zip
+          unzip -j ffmpeg.zip  -d behevc-tauri/src-tauri/resources && rm ffmpeg.zip
+          curl -fsSL -L "$base/ffprobe.zip" -o ffprobe.zip
+          unzip -j ffprobe.zip -d behevc-tauri/src-tauri/resources && rm ffprobe.zip
+          chmod +x behevc-tauri/src-tauri/resources/ffmpeg behevc-tauri/src-tauri/resources/ffprobe
+          file behevc-tauri/src-tauri/resources/ffmpeg | grep -q x86_64 || (echo "ffmpeg no es x86_64" && exit 1)
+
+      # ── Firma de código macOS (condicional: solo si hay certificado) ──────
+      - name: macOS — importar certificado Developer ID
+        if: matrix.os == 'macos' && env.APPLE_CERTIFICATE != ''
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KC_PASS="${KEYCHAIN_PASSWORD:-tmp-ci-pass}"
+          security create-keychain -p "$KC_PASS" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KC_PASS" "$KEYCHAIN_PATH"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain
+          security set-key-partition-list -S apple-tool:,apple: -k "$KC_PASS" "$KEYCHAIN_PATH"
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      # ffmpeg/ffprobe están en resources/ (no son sidecars que Tauri firme solo),
+      # así que hay que firmarlos con hardened runtime ANTES del build para que la
+      # notarización del .app no falle por binarios sin firmar.
+      - name: macOS — firmar ffmpeg/ffprobe (hardened runtime)
+        if: matrix.os == 'macos' && env.APPLE_CERTIFICATE != ''
+        run: |
+          for bin in ffmpeg ffprobe; do
+            codesign --force --options runtime --timestamp \
+              --sign "$APPLE_SIGNING_IDENTITY" "behevc-tauri/src-tauri/resources/$bin"
+          done
+          codesign -dv behevc-tauri/src-tauri/resources/ffmpeg 2>&1 | grep -i "Authority" || true
 
       - name: Linux x64 — ffmpeg (BtbN)
         if: matrix.label == 'Linux-x64'
@@ -179,3 +234,28 @@ jobs:
           name: BeHEVC-${{ matrix.label }}
           path: behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
           if-no-files-found: error
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Publica un Release en GitHub con TODOS los instaladores al hacer un tag vX.Y.Z.
+  # Se crea como BORRADOR para revisar artefactos y firma antes de hacerlo público.
+  # ───────────────────────────────────────────────────────────────────────────
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Descargar todos los artefactos
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publicar Release (borrador)
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          name: BeHEVC ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: artifacts/**/*

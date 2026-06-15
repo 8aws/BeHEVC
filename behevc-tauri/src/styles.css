@@ -87,9 +87,34 @@ header {
   letter-spacing: 0.02em;
 }
 
+.app-version {
+  font-size: 11px; font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  text-shadow: none;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
 .header-badges {
   display: flex; align-items: center; gap: 7px;
 }
+
+.lang-toggle {
+  display: flex; gap: 1px;
+  background: var(--bg2);
+  border: 1px solid var(--border-mid);
+  border-radius: 20px; padding: 2px;
+}
+.lang-btn {
+  font-family: inherit; font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 20px;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-dim); letter-spacing: 0.04em;
+  transition: background 0.15s, color 0.15s;
+}
+.lang-btn:hover:not(.active) { color: var(--text); }
+.lang-btn.active { background: var(--orange); color: #fff; }
 
 #ffmpeg-status {
   font-size: 11px; font-weight: 500;
@@ -292,6 +317,11 @@ td.col-codec {
   font-size: 11px; color: var(--text-dim);
 }
 td.col-status { width: 100px; }
+td.col-savings {
+  width: 190px; font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 11px; color: var(--green); white-space: nowrap;
+}
+th.col-savings { width: 190px; }
 
 .badge {
   display: inline-block; font-size: 11px; font-weight: 600;
@@ -321,6 +351,12 @@ td.col-status { width: 100px; }
   font-size: 10px; font-weight: 600; letter-spacing: 0.07em;
   text-transform: uppercase; color: var(--text-dim);
   width: 100px; flex-shrink: 0;
+}
+
+.file-meta {
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 11px; color: var(--text-dim);
+  min-width: 120px; text-align: right; flex-shrink: 0;
 }
 
 .progress-bar {
@@ -356,7 +392,8 @@ td.col-status { width: 100px; }
 /* ── Selector de calidad ─────────────────────────────────────────────────── */
 
 .quality-row {
-  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  flex-wrap: wrap; row-gap: 6px;
 }
 
 .quality-label {
@@ -364,6 +401,17 @@ td.col-status { width: 100px; }
   text-transform: uppercase; letter-spacing: 0.09em;
   color: var(--text-dim); white-space: nowrap;
   width: 52px; flex-shrink: 0;
+}
+
+/* Etiqueta secundaria dentro de una fila combinada (Codificador, Audio, Paralelo) */
+.sep-label {
+  width: auto; margin-left: 12px;
+}
+
+.cpu-hint {
+  font-size: 10px; font-weight: 500;
+  color: var(--text-dim); white-space: nowrap;
+  margin-left: 8px;
 }
 
 .quality-group {
@@ -383,6 +431,34 @@ td.col-status { width: 100px; }
 }
 .quality-btn:hover:not(.active) { color: var(--text); background: var(--bg3); }
 .quality-btn.active {
+  background: var(--orange); color: #fff; font-weight: 700;
+  box-shadow: 0 1px 6px rgba(255,122,0,0.35);
+}
+
+/* Los selectores de formato/audio comparten el aspecto del de calidad */
+.opt-btn {
+  font-family: inherit; font-size: 11px; font-weight: 500;
+  padding: 4px 13px; border-radius: 5px;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-dim);
+  transition: background 0.15s, color 0.15s;
+}
+.opt-btn:hover:not(.active) { color: var(--text); background: var(--bg3); }
+.opt-btn.active {
+  background: var(--orange); color: #fff; font-weight: 700;
+  box-shadow: 0 1px 6px rgba(255,122,0,0.35);
+}
+
+/* El selector de codificador comparte el aspecto del de calidad */
+.encoder-btn {
+  font-family: inherit; font-size: 11px; font-weight: 500;
+  padding: 4px 13px; border-radius: 5px;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-dim);
+  transition: background 0.15s, color 0.15s;
+}
+.encoder-btn:hover:not(.active) { color: var(--text); background: var(--bg3); }
+.encoder-btn.active {
   background: var(--orange); color: #fff; font-weight: 700;
   box-shadow: 0 1px 6px rgba(255,122,0,0.35);
 }
