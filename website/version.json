@@ -13,7 +13,7 @@
     }
   },
   "ffmpeg": {
-    "recommended_version": "7.1.1",
+    "recommended_version": "8.1.1",
     "download": "https://evermeet.cx/ffmpeg/"
   }
 }
