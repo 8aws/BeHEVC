@@ -1,7 +1,7 @@
 {
   "app": {
     "version": "2.0.0",
-    "release_date": "2026-06-14",
+    "release_date": "2026-06-15",
     "changelog": "BeHEVC 2.0: aceleración por hardware, ahorro de espacio y ETA en vivo, conversiones en paralelo, drag & drop, backup opcional, contenedor MP4/MKV, notificaciones, auto-update e i18n",
     "downloads": {
       "macos_arm64":   "https://b265.uverse.es/downloads/BeHEVC_2.0.0_aarch64.dmg",
