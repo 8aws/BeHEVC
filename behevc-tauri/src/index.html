@@ -136,6 +136,10 @@
         <span data-i18n="opt_hevc">Optimizar HEVC existentes</span>
       </label>
       <button id="btn-estimate" class="btn-outline btn-estimate" hidden data-i18n="btn_estimate">Estimar ahorro</button>
+      <span id="verdict-thresholds" class="verdict-thresholds" hidden>
+        <label><span data-i18n="th_quality">VMAF ≥</span> <input type="number" id="th-vmaf" min="50" max="100" step="1"></label>
+        <label><span data-i18n="th_savings">Ahorro ≥</span> <input type="number" id="th-savings" min="0" max="90" step="1">%</label>
+      </span>
       <span id="estimate-status" class="cpu-hint"></span>
     </div>
 
@@ -169,6 +173,7 @@
 
   </div>
   <script src="i18n.js"></script>
+  <script src="logic.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

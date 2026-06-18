@@ -91,8 +91,9 @@ Estado: ☐ pendiente · ◐ en curso · ☑ hecho.
   - **No merece la pena** (gris): ahorro < 10%.
   - **Pérdida de calidad** (rojo): VMAF < 90; y "no encoge" si saldría más grande.
   - Tooltip con `orig → est · VMAF · veredicto`.
-- ☐ Umbrales configurables (avanzado).
-- ☐ Resumen de lote: "Recomprimibles: 12 · ahorro potencial estimado: 8,4 GB".
+- ☑ **Umbrales configurables**: inputs "VMAF ≥" y "Ahorro ≥" (persistidos); recalculan los
+  chips al vuelo vía `verdictKey` en `logic.js`.
+- ☑ **Resumen de lote** tras estimar: "N recomprimibles · ahorro potencial ≈ X".
 
 ## Fase 6 — Recompresión segura  ◐
 
@@ -102,16 +103,16 @@ Estado: ☐ pendiente · ◐ en curso · ☑ hecho.
   se descarta el resultado y se conserva el original. Evento `file-optimal` → badge
   "↔ Ya óptimo" + línea de resumen; no se mueve a backup.
 - ☑ **10-bit preservado**: no se fuerza `-pix_fmt`, libx265 mantiene la profundidad del origen.
-- ◐ **HDR**: ffmpeg propaga las etiquetas de color por defecto; el forzado explícito de
-  primaries/transfer/matrix + metadata de mastering display queda como follow-up si surge algún caso.
-- ☐ Aviso de pérdida generacional antes de recomprimir en lote (pendiente, menor).
+- ☑ **HDR**: `detector::probe_color` lee primaries/transfer/colorspace del origen y se fuerzan
+  explícitamente en la salida (`-color_primaries/-color_trc/-colorspace`) cuando son señalables.
+- ☑ **Aviso de pérdida generacional** antes de recomprimir (diálogo nativo `ask`, una vez por sesión).
 
-## Fase 7 — Calidad (tests)  ◐
+## Fase 7 — Calidad (tests)  ☑
 
-- ☑ Tests de BPP/margen (`recompress_margin`, `parse_fps`).
-- ☑ Test de args de muestra (`build_sample_args`) y de parseo de VMAF (`parse_vmaf`). (18 tests en total)
-- ☐ Tests de extrapolación de tamaño (con datos sintéticos) y de umbrales de veredicto (en JS).
-- ☐ Smoke test en CI con un clip de muestra (compartido con la 2.0).
+- ☑ Tests Rust: BPP/margen, `parse_fps`, `build_sample_args`, `parse_vmaf` (18 tests).
+- ☑ Tests JS (`logic.js` + `test/logic.test.cjs`, 14 tests): `formatBytes`, `formatEta`,
+  `verdictKey` (incl. umbrales personalizados).
+- ☑ Smoke test en CI: el ffmpeg incluido codifica HEVC (libx265) en cada plataforma antes del build.
 
 ---
 

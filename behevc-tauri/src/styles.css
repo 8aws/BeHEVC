@@ -356,6 +356,17 @@ th.col-savings { width: 190px; }
 
 .btn-estimate { font-size: 11px; padding: 5px 12px; }
 
+.verdict-thresholds {
+  display: inline-flex; align-items: center; gap: 14px;
+  font-size: 11px; color: var(--text-dim);
+}
+.verdict-thresholds label { display: inline-flex; align-items: center; gap: 5px; }
+.verdict-thresholds input {
+  width: 48px; font-family: inherit; font-size: 11px;
+  background: var(--bg2); color: var(--text);
+  border: 1px solid var(--border-mid); border-radius: 5px; padding: 2px 6px;
+}
+
 .badge {
   display: inline-block; font-size: 11px; font-weight: 600;
   padding: 2px 9px; border-radius: 20px; letter-spacing: 0.02em;

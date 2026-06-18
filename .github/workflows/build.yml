@@ -203,6 +203,22 @@ jobs:
           Copy-Item "$bin\ffmpeg.exe","$bin\ffprobe.exe" "behevc-tauri/src-tauri/resources/"
           Remove-Item ffmpeg.zip,ffmpeg_tmp -Recurse -Force
 
+      # ── Smoke test: el ffmpeg incluido codifica HEVC en esta plataforma ────
+      - name: Smoke test ffmpeg (libx265)
+        if: matrix.os != 'windows'
+        run: |
+          FF=behevc-tauri/src-tauri/resources/ffmpeg
+          "$FF" -hide_banner -v error -f lavfi -i testsrc2=size=320x240:rate=24 -t 1 \
+            -c:v libx265 -crf 30 -f null - && echo "✔ smoke ffmpeg OK"
+
+      - name: Smoke test ffmpeg (libx265)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          & behevc-tauri/src-tauri/resources/ffmpeg.exe -hide_banner -v error -f lavfi -i testsrc2=size=320x240:rate=24 -t 1 -c:v libx265 -crf 30 -f null -
+          if ($LASTEXITCODE -ne 0) { Write-Error "smoke ffmpeg FALLO"; exit 1 }
+          Write-Output "smoke ffmpeg OK"
+
       # ── Build ─────────────────────────────────────────────────────────────
       - name: npm install
         working-directory: behevc-tauri

@@ -230,6 +230,9 @@ fn process_one_file(
 
     let duration = get_duration(input_path, ffprobe_path);
 
+    // Etiquetas de color/HDR del original para preservarlas en la salida.
+    let color_args = build_color_args(&crate::detector::probe_color(input_path, ffprobe_path));
+
     if let Some(parent) = Path::new(&job.output).parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -240,7 +243,7 @@ fn process_one_file(
         &job.input, &job.output,
         settings, ffmpeg_path,
         &MappingMode::Full,
-        cancelled, progresses,
+        cancelled, progresses, &color_args,
     );
     if was_cancelled {
         let _ = std::fs::remove_file(&job.output);
@@ -268,7 +271,7 @@ fn process_one_file(
             &job.input, &job.output,
             &fallback_settings, ffmpeg_path,
             &MappingMode::PrimaryOnly,
-            cancelled, progresses,
+            cancelled, progresses, &color_args,
         )
     } else {
         (true, false)
@@ -348,8 +351,9 @@ fn run_ffmpeg_pass(
     mode:       &MappingMode,
     cancelled:  &Arc<Mutex<bool>>,
     progresses: &ProgressVec,
+    color_args: &[String],
 ) -> (bool, bool) {
-    let args = build_ffmpeg_args(input, output, settings, mode);
+    let args = build_ffmpeg_args(input, output, settings, mode, color_args);
 
     let mut child = match Command::new(ffmpeg_path)
         .args(&args)
@@ -505,6 +509,7 @@ fn build_ffmpeg_args(
     output: &str,
     settings: &ConversionSettings,
     mode: &MappingMode,
+    color_args: &[String],
 ) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
 
@@ -544,6 +549,9 @@ fn build_ffmpeg_args(
 
     // Codec de vídeo — args específicos según el encoder seleccionado.
     append_video_codec_args(&mut args, settings);
+
+    // Preservar metadatos de color/HDR del original (primaries/transfer/colorspace)
+    args.extend(color_args.iter().cloned());
 
     // Audio: copiar tal cual o recodificar a AAC (máxima compatibilidad).
     if settings.audio == "aac" {
@@ -632,6 +640,16 @@ fn human_size(bytes: u64) -> String {
     else            { format!("{:.0} KB", b / KB) }
 }
 
+/// Convierte las etiquetas de color del original en flags de ffmpeg para
+/// preservar HDR/color en la salida (vacío si no hay datos señalables).
+fn build_color_args(tags: &crate::detector::ColorTags) -> Vec<String> {
+    let mut a = Vec::new();
+    if let Some(p) = &tags.primaries { a.extend(["-color_primaries".to_string(), p.clone()]); }
+    if let Some(t) = &tags.transfer  { a.extend(["-color_trc".to_string(),       t.clone()]); }
+    if let Some(s) = &tags.space     { a.extend(["-colorspace".to_string(),      s.clone()]); }
+    a
+}
+
 /// Traduce el preset genérico (slow/medium/fast) al esquema p1-p7 de NVENC.
 fn nvenc_preset(preset: &str) -> &'static str {
     match preset {
@@ -687,7 +705,7 @@ mod tests {
     #[test]
     fn software_uses_crf_and_preset() {
         let s = settings("libx265", "copy");
-        let args = build_ffmpeg_args("in.mp4", "out.mkv", &s, &MappingMode::Full);
+        let args = build_ffmpeg_args("in.mp4", "out.mkv", &s, &MappingMode::Full, &[]);
         assert_eq!(value_after(&args, "-c:v").as_deref(), Some("libx265"));
         assert_eq!(value_after(&args, "-crf").as_deref(), Some("28"));
         assert_eq!(value_after(&args, "-preset").as_deref(), Some("medium"));
@@ -697,7 +715,7 @@ mod tests {
     #[test]
     fn videotoolbox_maps_crf_to_quality() {
         let s = settings("hevc_videotoolbox", "copy");
-        let args = build_ffmpeg_args("in.mp4", "out.mkv", &s, &MappingMode::Full);
+        let args = build_ffmpeg_args("in.mp4", "out.mkv", &s, &MappingMode::Full, &[]);
         assert_eq!(value_after(&args, "-c:v").as_deref(), Some("hevc_videotoolbox"));
         // q:v = 118 - 2*28 = 62
         assert_eq!(value_after(&args, "-q:v").as_deref(), Some("62"));
@@ -708,7 +726,7 @@ mod tests {
     fn nvenc_uses_cq_and_mapped_preset() {
         let mut s = settings("hevc_nvenc", "copy");
         s.preset = "slow".to_string();
-        let args = build_ffmpeg_args("in.mp4", "out.mkv", &s, &MappingMode::Full);
+        let args = build_ffmpeg_args("in.mp4", "out.mkv", &s, &MappingMode::Full, &[]);
         assert_eq!(value_after(&args, "-c:v").as_deref(), Some("hevc_nvenc"));
         assert_eq!(value_after(&args, "-cq").as_deref(), Some("28"));
         assert_eq!(value_after(&args, "-preset").as_deref(), Some("p6"));
@@ -717,7 +735,7 @@ mod tests {
     #[test]
     fn vaapi_inits_device_before_input() {
         let s = settings("hevc_vaapi", "copy");
-        let args = build_ffmpeg_args("in.mp4", "out.mkv", &s, &MappingMode::Full);
+        let args = build_ffmpeg_args("in.mp4", "out.mkv", &s, &MappingMode::Full, &[]);
         let dev = args.iter().position(|a| a == "-vaapi_device").unwrap();
         let inp = args.iter().position(|a| a == "-i").unwrap();
         assert!(dev < inp, "el device VAAPI debe inicializarse antes del input");
@@ -725,10 +743,10 @@ mod tests {
 
     #[test]
     fn audio_copy_vs_aac() {
-        let copy = build_ffmpeg_args("in.mp4", "out.mkv", &settings("libx265", "copy"), &MappingMode::Full);
+        let copy = build_ffmpeg_args("in.mp4", "out.mkv", &settings("libx265", "copy"), &MappingMode::Full, &[]);
         assert_eq!(value_after(&copy, "-c:a").as_deref(), Some("copy"));
 
-        let aac = build_ffmpeg_args("in.mp4", "out.mkv", &settings("libx265", "aac"), &MappingMode::Full);
+        let aac = build_ffmpeg_args("in.mp4", "out.mkv", &settings("libx265", "aac"), &MappingMode::Full, &[]);
         assert_eq!(value_after(&aac, "-c:a").as_deref(), Some("aac"));
         assert_eq!(value_after(&aac, "-b:a").as_deref(), Some("192k"));
     }
@@ -736,11 +754,11 @@ mod tests {
     #[test]
     fn mp4_uses_mov_text_subtitles() {
         let s = settings("libx265", "copy");
-        let mp4 = build_ffmpeg_args("in.mkv", "out.mp4", &s, &MappingMode::Full);
+        let mp4 = build_ffmpeg_args("in.mkv", "out.mp4", &s, &MappingMode::Full, &[]);
         assert_eq!(value_after(&mp4, "-c:s").as_deref(), Some("mov_text"));
         assert!(!contains(&mp4, "-c:d"), "MP4 no debe copiar streams de datos");
 
-        let mkv = build_ffmpeg_args("in.mkv", "out.mkv", &s, &MappingMode::Full);
+        let mkv = build_ffmpeg_args("in.mkv", "out.mkv", &s, &MappingMode::Full, &[]);
         assert_eq!(value_after(&mkv, "-c:s").as_deref(), Some("copy"));
         assert!(contains(&mkv, "-c:d"));
     }
@@ -748,7 +766,7 @@ mod tests {
     #[test]
     fn primary_only_drops_subtitles() {
         let s = settings("libx265", "copy");
-        let args = build_ffmpeg_args("in.mkv", "out.mkv", &s, &MappingMode::PrimaryOnly);
+        let args = build_ffmpeg_args("in.mkv", "out.mkv", &s, &MappingMode::PrimaryOnly, &[]);
         assert!(!contains(&args, "-c:s"));
         assert!(!contains(&args, "0:s?"));
     }

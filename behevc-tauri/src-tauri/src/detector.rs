@@ -134,6 +134,50 @@ pub fn recompress_margin(bpp: f64) -> &'static str {
     else { "low" }
 }
 
+/// Etiquetas de color del stream (para preservar HDR al recomprimir).
+#[derive(Debug, Clone, Default)]
+pub struct ColorTags {
+    pub primaries: Option<String>,  // ej: bt2020
+    pub transfer:  Option<String>,  // ej: smpte2084 (PQ) / arib-std-b67 (HLG)
+    pub space:     Option<String>,  // ej: bt2020nc
+}
+
+/// Lee las etiquetas de color del vídeo. Solo devuelve valores "señalables"
+/// (descarta unknown/reserved/N/A) para no forzar metadatos inválidos.
+pub fn probe_color(path: &Path, ffprobe_path: &str) -> ColorTags {
+    let mut tags = ColorTags::default();
+    let path_str = match path.to_str() { Some(s) => s, None => return tags };
+
+    let output = Command::new(ffprobe_path)
+        .args([
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=color_primaries,color_transfer,color_space",
+            "-of", "json",
+            path_str,
+        ])
+        .output();
+
+    let out = match output { Ok(o) => o, Err(_) => return tags };
+    let json: serde_json::Value = match serde_json::from_slice(&out.stdout) {
+        Ok(v) => v, Err(_) => return tags,
+    };
+    if let Some(s) = json["streams"].get(0) {
+        tags.primaries = clean_color(s["color_primaries"].as_str());
+        tags.transfer  = clean_color(s["color_transfer"].as_str());
+        tags.space     = clean_color(s["color_space"].as_str());
+    }
+    tags
+}
+
+fn clean_color(v: Option<&str>) -> Option<String> {
+    match v {
+        Some(s) if !s.is_empty()
+            && s != "unknown" && s != "reserved" && s != "N/A" => Some(s.to_string()),
+        _ => None,
+    }
+}
+
 /// Obtiene la duración del vídeo en segundos (para calcular el progreso de conversión)
 pub fn get_duration(path: &Path, ffprobe_path: &str) -> f64 {
     let output = Command::new(ffprobe_path)

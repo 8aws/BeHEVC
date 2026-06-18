@@ -33,6 +33,9 @@ const state = {
   concurrency:        'auto',   // 'auto' | número de conversiones simultáneas
   lang:               'es',     // idioma de la UI: 'es' | 'en'
   optimizeHevc:       false,    // recomprimir HEVC existentes (3.0)
+  estMinVmaf:         93,       // umbral VMAF para veredicto "Recomendado"
+  estMinSavings:      15,       // umbral % ahorro para veredicto "Recomendado"
+  genWarned:          false,    // aviso de pérdida generacional ya mostrado (sesión)
   jobIndexMap:        {},   // jobIdx → fileIdx en state.files
   estimateIndexMap:   {},   // estIdx → fileIdx (precálculo 3.0)
   lastConvertingIdx:  -1,   // último file_index visto en conversion-progress
@@ -125,6 +128,7 @@ function updateButtonStates() {
   const hevcSelected = state.files.some(f => f.isHevc && f.recompress);
   btnEstimate.hidden   = !(state.optimizeHevc && hevcSelected);
   btnEstimate.disabled = busy;
+  $('verdict-thresholds').hidden = !state.optimizeHevc;
 
   // Botón "Vaciar lista": disponible si hay archivos y no se está procesando (pausa OK)
   btnClear.hidden = !(hasFiles && !state.isProcessing);
@@ -345,9 +349,20 @@ async function init() {
   });
 
   await listen('estimate-done', () => {
-    estimateStatus.textContent = '';
     btnEstimate.disabled = false;
     appendLog(t('log_estimate_done'));
+    // Resumen de ahorro potencial del lote (sobre los estimados que encogen)
+    let n = 0, saved = 0;
+    state.files.forEach(f => {
+      if (f.estSavings > 0 && f.estSize > 0 && f.size > 0) { n++; saved += f.size - f.estSize; }
+    });
+    if (n > 0) {
+      const txt = t('est_summary', { n, size: formatBytes(saved) });
+      estimateStatus.textContent = txt;
+      appendLog(txt + '\n');
+    } else {
+      estimateStatus.textContent = '';
+    }
     updateButtonStates();
   });
 
@@ -357,20 +372,7 @@ async function init() {
   });
 }
 
-// ── Formato ─────────────────────────────────────────────────────────────
-
-function formatBytes(bytes) {
-  if (bytes >= 1024 ** 3) return (bytes / 1024 ** 3).toFixed(2) + ' GB';
-  if (bytes >= 1024 ** 2) return (bytes / 1024 ** 2).toFixed(0) + ' MB';
-  return (bytes / 1024).toFixed(0) + ' KB';
-}
-
-function formatEta(seconds) {
-  const s = Math.round(seconds);
-  if (s >= 3600) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-  if (s >= 60)   return `${Math.floor(s / 60)}m ${s % 60}s`;
-  return `${s}s`;
-}
+// formatBytes / formatEta / verdictKey viven en logic.js (cargado antes que main.js)
 
 // ── Carpeta destino ───────────────────────────────────────────────────────
 
@@ -429,6 +431,18 @@ function revertQueuedToPending() {
   });
 }
 
+// Aviso nativo de pérdida generacional al recomprimir HEVC. Si el diálogo no está
+// disponible, no bloquea (devuelve true).
+async function confirmGenerational(n) {
+  try {
+    const dlg = window.__TAURI__.dialog;
+    if (dlg && dlg.ask) {
+      return await dlg.ask(t('gen_warn', { n }), { title: 'B265', kind: 'warning' });
+    }
+  } catch (_) {}
+  return true;
+}
+
 async function launchConversion() {
   const resume = state.isPaused;
   state.isPaused          = false;
@@ -450,6 +464,14 @@ async function launchConversion() {
     }
   });
   if (!jobs.length) return;
+
+  // Aviso de pérdida generacional al recomprimir HEVC (una vez por sesión)
+  const recompressCount = jobs.filter(j => j.recompress).length;
+  if (recompressCount > 0 && !state.genWarned) {
+    const ok = await confirmGenerational(recompressCount);
+    if (!ok) return;
+    state.genWarned = true;
+  }
 
   // Marcar los de este lote como "en cola"
   Object.values(state.jobIndexMap).forEach(fi => {
@@ -685,14 +707,18 @@ function renderFileList() {
   });
 }
 
-// Veredicto del precálculo a partir de ahorro y VMAF.
+// Veredicto del precálculo (usa verdictKey de logic.js con los umbrales del usuario).
+const VERDICT_STYLE = {
+  recommended: { cls: 'est-good', key: 'verdict_recommended' },
+  marginal:    { cls: 'est-mid',  key: 'verdict_marginal' },
+  notworth:    { cls: 'est-low',  key: 'verdict_notworth' },
+  loss:        { cls: 'est-bad',  key: 'verdict_loss' },
+  bad:         { cls: 'est-bad',  key: 'verdict_notworth' },
+};
 function estVerdict(f) {
-  const s = f.estSavings, v = f.estVmaf;
-  if (s < 0)                          return { cls: 'est-bad', label: t('verdict_notworth') };
-  if (v != null && v < 90)            return { cls: 'est-bad', label: t('verdict_loss') };
-  if (s >= 15 && (v == null || v >= 93)) return { cls: 'est-good', label: t('verdict_recommended') };
-  if (s < 10)                         return { cls: 'est-low', label: t('verdict_notworth') };
-  return { cls: 'est-mid', label: t('verdict_marginal') };
+  const k = verdictKey(f.estSavings, f.estVmaf, state.estMinVmaf, state.estMinSavings);
+  const st = VERDICT_STYLE[k] || VERDICT_STYLE.marginal;
+  return { cls: st.cls, label: t(st.key) };
 }
 
 // Chip de ahorro estimado por muestreo + VMAF + veredicto (precálculo 3.0).
@@ -1021,6 +1047,20 @@ $('opt-hevc').addEventListener('change', e => {
   saveSettings();
 });
 
+// Umbrales de veredicto configurables (recalculan los chips al vuelo)
+$('th-vmaf').addEventListener('change', e => {
+  const v = parseInt(e.target.value);
+  if (!isNaN(v)) state.estMinVmaf = Math.max(50, Math.min(100, v));
+  e.target.value = state.estMinVmaf;
+  renderFileList(); saveSettings();
+});
+$('th-savings').addEventListener('change', e => {
+  const v = parseInt(e.target.value);
+  if (!isNaN(v)) state.estMinSavings = Math.max(0, Math.min(90, v));
+  e.target.value = state.estMinSavings;
+  renderFileList(); saveSettings();
+});
+
 // Botón "Estimar ahorro": muestrea los HEVC seleccionados y rellena la columna Ahorro
 btnEstimate.addEventListener('click', async () => {
   if (state.isProcessing || btnEstimate.disabled) return;
@@ -1139,6 +1179,8 @@ function saveSettings() {
       concurrency:  state.concurrency,
       lang:         LANG,
       optimizeHevc: state.optimizeHevc,
+      estMinVmaf:   state.estMinVmaf,
+      estMinSavings: state.estMinSavings,
       outputFolder: state.outputFolder,
       backupFolder: state.backupFolder,
     }));
@@ -1183,6 +1225,11 @@ function loadSettings() {
   // Modo optimizar HEVC (3.0)
   state.optimizeHevc = !!s.optimizeHevc;
   $('opt-hevc').checked = state.optimizeHevc;
+  // Umbrales de veredicto
+  if (typeof s.estMinVmaf === 'number')    state.estMinVmaf = s.estMinVmaf;
+  if (typeof s.estMinSavings === 'number') state.estMinSavings = s.estMinSavings;
+  $('th-vmaf').value    = state.estMinVmaf;
+  $('th-savings').value = state.estMinSavings;
   // Carpetas
   if (s.outputFolder) {
     state.outputFolder = s.outputFolder;
