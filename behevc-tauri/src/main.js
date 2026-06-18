@@ -51,6 +51,7 @@ const btnBackup         = $('btn-backup');
 const btnStart          = $('btn-start');
 const btnPause          = $('btn-pause');
 const btnCancel         = $('btn-cancel');
+const btnClear          = $('btn-clear');
 const btnOpenOutput     = $('btn-open-output');
 const btnNewSession     = $('btn-new-session');
 const btnCheckUpdate    = $('btn-check-update');
@@ -124,6 +125,9 @@ function updateButtonStates() {
   const hevcSelected = state.files.some(f => f.isHevc && f.recompress);
   btnEstimate.hidden   = !(state.optimizeHevc && hevcSelected);
   btnEstimate.disabled = busy;
+
+  // Botón "Vaciar lista": disponible si hay archivos y no se está procesando (pausa OK)
+  btnClear.hidden = !(hasFiles && !state.isProcessing);
 }
 
 // ── Inicialización ────────────────────────────────────────────────────────
@@ -200,17 +204,21 @@ async function init() {
 
   // ── conversion-progress: progreso en tiempo real ──────────────────────
   await listen('conversion-progress', ({ payload }) => {
-    if (payload.file_progress >= 0)
-      progFile.style.width = (payload.file_progress * 100).toFixed(1) + '%';
-    if (payload.global_progress >= 0)
-      progGlobal.style.width = (payload.global_progress * 100).toFixed(1) + '%';
-
-    // Velocidad + ETA en vivo del archivo actual
-    if (payload.speed > 0 || payload.eta > 0) {
-      const parts = [];
-      if (payload.speed > 0) parts.push(`${payload.speed.toFixed(1)}×`);
-      if (payload.eta   > 0) parts.push(`ETA ${formatEta(payload.eta)}`);
-      fileMeta.textContent = parts.join(' · ');
+    // Throttle de las barras/meta: en lotes grandes llegan miles de eventos;
+    // refrescar el DOM en cada uno satura el hilo. Como mucho cada ~100 ms.
+    const now = performance.now();
+    if (now - lastBarUpdate > 100) {
+      lastBarUpdate = now;
+      if (payload.file_progress >= 0)
+        progFile.style.width = (payload.file_progress * 100).toFixed(1) + '%';
+      if (payload.global_progress >= 0)
+        progGlobal.style.width = (payload.global_progress * 100).toFixed(1) + '%';
+      if (payload.speed > 0 || payload.eta > 0) {
+        const parts = [];
+        if (payload.speed > 0) parts.push(`${payload.speed.toFixed(1)}×`);
+        if (payload.eta   > 0) parts.push(`ETA ${formatEta(payload.eta)}`);
+        fileMeta.textContent = parts.join(' · ');
+      }
     }
 
     // ── Actualizar fila en la lista de archivos ──────────────────────────
@@ -519,10 +527,12 @@ btnOpenOutput.addEventListener('click', () => {
   if (state.outputFolder) invoke('open_folder', { path: state.outputFolder });
 });
 
-btnNewSession.addEventListener('click', () => {
+// Vacía la lista/cola y deja la app lista para un lote nuevo.
+function clearList() {
   state.files             = [];
   state.filesDone         = 0;
   state.jobIndexMap       = {};
+  state.estimateIndexMap  = {};
   state.lastConvertingIdx = -1;
   state.totalOriginal     = 0;
   state.totalOutput       = 0;
@@ -530,6 +540,7 @@ btnNewSession.addEventListener('click', () => {
   btnPause.hidden         = true;
   btnStart.textContent    = t('btn_start');
   fileMeta.textContent    = '';
+  estimateStatus.textContent = '';
   completionBanner.hidden = true;
   scanStatus.hidden       = true;
   progFile.style.width    = '0%';
@@ -539,6 +550,14 @@ btnNewSession.addEventListener('click', () => {
   updateStats();
   updateButtonStates();
   appendLog(t('log_cleared'));
+}
+
+btnNewSession.addEventListener('click', clearList);
+
+// Botón "Vaciar lista": disponible en cualquier momento mientras no se esté procesando
+btnClear.addEventListener('click', () => {
+  if (state.isProcessing) return;
+  clearList();
 });
 
 function showCompletionBanner() {
@@ -751,8 +770,12 @@ function setFileRowStatus(jobIndex, status, progress) {
 
   switch (status) {
     case 'converting': {
-      const pct = progress > 0 ? ` ${(progress * 100).toFixed(0)}%` : ` ${t('badge_converting')}`;
-      cell.innerHTML = `<span class="badge badge-converting">⟳${pct}</span>`;
+      const pctInt = progress > 0 ? Math.round(progress * 100) : -1;
+      // Evitar reescrituras de DOM redundantes: solo si cambió el % entero
+      if (current === 'converting' && state.files[fileIdx]._pct === pctInt) break;
+      if (state.files[fileIdx]) state.files[fileIdx]._pct = pctInt;
+      const label = pctInt >= 0 ? ` ${pctInt}%` : ` ${t('badge_converting')}`;
+      cell.innerHTML = `<span class="badge badge-converting">⟳${label}</span>`;
       if (current !== 'converting') row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       break;
     }
@@ -803,8 +826,18 @@ function updateStats() {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+// Cap del log: en lotes grandes (cientos de archivos) el texto crece sin límite y
+// `textContent +=` se vuelve cuadrático, saturando el hilo del webview. Recortamos
+// por el principio cuando supera el umbral.
+const LOG_MAX_CHARS  = 400000;
+const LOG_KEEP_CHARS = 300000;
+
 function appendLog(text) {
-  logEl.textContent += text;
+  let s = logEl.textContent + text;
+  if (s.length > LOG_MAX_CHARS) {
+    s = '…\n' + s.slice(s.length - LOG_KEEP_CHARS);
+  }
+  logEl.textContent = s;
   logEl.parentElement.scrollTop = logEl.parentElement.scrollHeight;
 }
 
@@ -829,6 +862,7 @@ const UPDATE_INTERVAL_MS  = 24 * 60 * 60 * 1000; // 24 horas
 let appDataDir = null;
 let appVersion = null;
 let cpuInfo    = null;
+let lastBarUpdate = 0;   // throttle de las barras de progreso (ms)
 
 async function checkForUpdates(installedFfmpegVersion) {
   // Throttle: no comprobar si ya lo hicimos en las últimas 24 h

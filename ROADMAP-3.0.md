@@ -5,6 +5,30 @@ de calidad/tamaño para que el usuario decida si merece la pena recodificar.
 
 Estado: ☐ pendiente · ◐ en curso · ☑ hecho.
 
+> ## Pendientes para subversiones (3.0.x / 3.1) — anotado 2026-06-18
+>
+> **Bugs**
+> - ☐ **Cola larga colapsa**: en una conversión de **>400 archivos**, tras ~280 la cola
+>   "colapsó" y dejó de actualizar las líneas de *Convirtiendo*. Investigar: posible
+>   saturación de eventos `conversion-progress`/DOM con listas enormes, o problema en el
+>   pool/cola al acumular. Prioridad alta para 3.0.1. (Repro: lote de 400+.)
+>
+> **UX / gestión de cola**
+> - ☐ **Vaciar/purgar la cola** con un botón disponible **en cualquier momento** (no solo en
+>   el banner de fin). Hoy, para cambiar a otro lote hay que cerrar y reabrir la app; añadir
+>   elementos los suma a los existentes (bien para lotes, pero falta "limpiar lista y elegir nuevos").
+>
+> **Rebranding**
+> - ☐ **Renombrar la app a `B265`** (se lee "Be265" en inglés) — es el nombre del icono y
+>   desliga del nombre del codec para evitar confusión. Alcance: `productName`, título de
+>   ventana, web (título/branding/meta), `version.json`/changelog, textos i18n.
+>   **Decisión pendiente:** ¿mantener el `identifier` `com.behevc.app` (recomendado, preserva
+>   continuidad de updates/firma para usuarios existentes) o cambiarlo? Cambiarlo rompería el
+>   reconocimiento de la app instalada.
+>
+> **Web**
+> - ☐ Sustituir el **emoji 🪟 de Windows** por un logotipo decente en la página de descargas.
+
 > **Principio de diseño:** recomprimir HEVC→HEVC tiene pérdida generacional. La app no
 > debe "recomprimir por recomprimir": debe **estimar ahorro y calidad** y recomendar solo
 > cuando compense. El comportamiento actual (saltar los HEVC) sigue siendo el predeterminado.
@@ -118,7 +142,9 @@ Acordadas el 2026-06-15. Quedan apuntadas para retomar más adelante; nada de c�
 - ☐ ⭐ **Calidad objetivo por VMAF**: elegir "VMAF ≥ N" en vez de CRF; la app busca el CRF
   que lo cumple por búsqueda binaria sobre muestras.
 - ☐ ⭐ **Reescalado opcional** (4K→1080p, etc.) con presets y `zscale` consciente de HDR/color.
-- ☐ ⭐ **Carpeta vigilada (watch folder)**: auto-convertir lo que llegue a una carpeta (ideal NAS).
+- ☐ ⭐ **Carpeta(s) vigilada(s) (watch folder)**: monitorizar **una o varias carpetas** y
+  **auto-convertir** los nuevos elementos compatibles, **solo si la ganancia estimada > 50%**
+  (reusa el precálculo por muestreo/VMAF de la 3.0). Ideal para NAS/servidor de medios.
 - ☐ ⭐ **Perfiles guardados**: ajustes con nombre ("Plex 1080p", "Archivo 4K HDR"), un clic.
 
 ### Flujo / automatización
