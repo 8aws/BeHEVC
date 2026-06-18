@@ -28,7 +28,15 @@ Estado: ☐ pendiente · ◐ en curso · ☑ hecho.
 >
 > **Web**
 > - ☑ Logo de Windows: emoji 🪟 sustituido por SVG de 4 paneles (tarjeta principal + alt).
->   *(Pendiente de desplegar con el próximo release.)*
+> - ☑ Favicon B265 + desplegada en vivo (rebrand) + desplegable "Versiones anteriores" (data-driven).
+>
+> **Pulido 3.0.x (hecho, acumulado en main)**
+> - ☑ i18n de los logs del backend (Rust): se pasa `lang` al converter; ✔/⚠/❌/↔, backup y
+>   errores de carpeta destino en ES/EN (los prefijos de emoji se mantienen).
+> - ☑ ffmpeg arm64 nativo en dev (resources/) → VideoToolbox funciona en local.
+> - ☑ "Estimar ahorro" muestrea TODOS los HEVC (no solo los marcados) para decidir mejor.
+> - ☑ Smoke e2e real: `scripts/smoke-encode.sh` (clip → receta real → verifica hevc + prueba HW).
+> - ☑ Aviso al cerrar la app si hay conversión/estimación en marcha (diálogo nativo).
 
 > **Principio de diseño:** recomprimir HEVC→HEVC tiene pérdida generacional. La app no
 > debe "recomprimir por recomprimir": debe **estimar ahorro y calidad** y recomendar solo

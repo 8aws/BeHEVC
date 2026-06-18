@@ -130,6 +130,7 @@ pub fn run_conversion(
     cancelled: Arc<Mutex<bool>>,
     paused: Arc<Mutex<bool>>,
     concurrency: usize,
+    lang: String,
 ) -> Vec<bool> {
     let total = jobs.len();
     if total == 0 {
@@ -147,6 +148,7 @@ pub fn run_conversion(
     let settings     = Arc::new(settings);
     let ffmpeg_path  = Arc::new(ffmpeg_path);
     let ffprobe_path = Arc::new(ffprobe_path);
+    let lang         = Arc::new(lang);
 
     // Nº de trabajadores: al menos 1, nunca más que archivos
     let workers = concurrency.max(1).min(total);
@@ -162,6 +164,7 @@ pub fn run_conversion(
         let ffprobe_path = Arc::clone(&ffprobe_path);
         let cancelled    = Arc::clone(&cancelled);
         let paused       = Arc::clone(&paused);
+        let lang         = Arc::clone(&lang);
 
         std::thread::spawn(move || {
             loop {
@@ -177,7 +180,7 @@ pub fn run_conversion(
                 let ok = process_one_file(
                     &app, index, total, &jobs[index],
                     settings.as_ref(), ffmpeg_path.as_str(), ffprobe_path.as_str(),
-                    &cancelled, &progresses,
+                    &cancelled, &progresses, lang.as_str(),
                 );
                 successes.lock().unwrap()[index] = ok;
             }
@@ -217,8 +220,10 @@ fn process_one_file(
     ffprobe_path: &str,
     cancelled:    &Arc<Mutex<bool>>,
     progresses:   &ProgressVec,
+    lang:         &str,
 ) -> bool {
     if *cancelled.lock().unwrap() { return false; }
+    let en = lang == "en";
 
     let input_path = Path::new(&job.input);
     let file_name  = input_path.file_name()
@@ -243,7 +248,7 @@ fn process_one_file(
         &job.input, &job.output,
         settings, ffmpeg_path,
         &MappingMode::Full,
-        cancelled, progresses, &color_args,
+        cancelled, progresses, &color_args, lang,
     );
     if was_cancelled {
         let _ = std::fs::remove_file(&job.output);
@@ -259,19 +264,20 @@ fn process_one_file(
         let mut fallback_settings = settings.clone();
         let note = if fallback_settings.is_hardware() {
             fallback_settings.encoder = "libx265".to_string();
-            "reintentando en software (libx265) sin subtítulos/datos"
-        } else {
-            "reintentando sin subtítulos/datos"
-        };
-        emit_log(app, progresses, index, total, &file_name, 0.0,
-            &format!("⚠ {} — intento 1 fallido, {}…\n", file_name, note));
+            if en { "retrying in software (libx265) without subtitles/data" }
+            else  { "reintentando en software (libx265) sin subtítulos/datos" }
+        } else if en { "retrying without subtitles/data" }
+          else      { "reintentando sin subtítulos/datos" };
+        let m = if en { format!("⚠ {} — attempt 1 failed, {}…\n", file_name, note) }
+                else  { format!("⚠ {} — intento 1 fallido, {}…\n", file_name, note) };
+        emit_log(app, progresses, index, total, &file_name, 0.0, &m);
 
         run_ffmpeg_pass(
             app, index, total, &file_name, duration,
             &job.input, &job.output,
             &fallback_settings, ffmpeg_path,
             &MappingMode::PrimaryOnly,
-            cancelled, progresses, &color_args,
+            cancelled, progresses, &color_args, lang,
         )
     } else {
         (true, false)
@@ -296,9 +302,14 @@ fn process_one_file(
         if job.recompress && original_size > 0 && output_size >= original_size {
             let _ = std::fs::remove_file(&job.output);
             let _ = app.emit("file-optimal", index);
-            emit_log(app, progresses, index, total, &file_name, 1.0,
-                &format!("↔ {} ya estaba óptimo: recomprimir no ahorra ({} → {}); original conservado\n",
-                    file_name, human_size(original_size), human_size(output_size)));
+            let m = if en {
+                format!("↔ {} was already optimal: recompressing saves nothing ({} → {}); original kept\n",
+                    file_name, human_size(original_size), human_size(output_size))
+            } else {
+                format!("↔ {} ya estaba óptimo: recomprimir no ahorra ({} → {}); original conservado\n",
+                    file_name, human_size(original_size), human_size(output_size))
+            };
+            emit_log(app, progresses, index, total, &file_name, 1.0, &m);
             return false; // no cuenta como convertido; el original no se mueve a backup
         }
 
@@ -313,22 +324,25 @@ fn process_one_file(
         } else {
             String::new()
         };
-        emit_log(app, progresses, index, total, &file_name, 1.0,
-            &format!("✔ {} convertido correctamente{}\n", file_name, saved));
+        let m = if en { format!("✔ {} converted successfully{}\n", file_name, saved) }
+                else  { format!("✔ {} convertido correctamente{}\n", file_name, saved) };
+        emit_log(app, progresses, index, total, &file_name, 1.0, &m);
         true
     } else {
         let _ = std::fs::remove_file(&job.output);
         let reason = if !exit_ok && !exit_ok2 {
-            "ffmpeg terminó con error en ambos intentos"
+            if en { "ffmpeg failed on both attempts" }
+            else  { "ffmpeg terminó con error en ambos intentos" }
         } else if exit_ok || exit_ok2 {
-            "ffmpeg terminó sin error pero el archivo de salida está truncado o es demasiado pequeño \
-             (posible error de disco, espacio insuficiente, o fallo de memoria durante la codificación)"
-        } else {
-            "archivo de salida vacío o inválido tras ambos intentos"
-        };
-        emit_log(app, progresses, index, total, &file_name, 0.0,
-            &format!("❌ {} — {}\n   → original intacto, no se moverá a backup\n",
-                file_name, reason));
+            if en { "ffmpeg finished without error but the output is truncated or too small \
+                     (possible disk error, insufficient space, or memory failure while encoding)" }
+            else  { "ffmpeg terminó sin error pero el archivo de salida está truncado o es demasiado pequeño \
+                     (posible error de disco, espacio insuficiente, o fallo de memoria durante la codificación)" }
+        } else if en { "empty or invalid output after both attempts" }
+          else      { "archivo de salida vacío o inválido tras ambos intentos" };
+        let m = if en { format!("❌ {} — {}\n   → original intact, will not be moved to backup\n", file_name, reason) }
+                else  { format!("❌ {} — {}\n   → original intacto, no se moverá a backup\n", file_name, reason) };
+        emit_log(app, progresses, index, total, &file_name, 0.0, &m);
         false
     }
 }
@@ -352,6 +366,7 @@ fn run_ffmpeg_pass(
     cancelled:  &Arc<Mutex<bool>>,
     progresses: &ProgressVec,
     color_args: &[String],
+    lang:       &str,
 ) -> (bool, bool) {
     let args = build_ffmpeg_args(input, output, settings, mode, color_args);
 
@@ -363,8 +378,12 @@ fn run_ffmpeg_pass(
     {
         Ok(c) => c,
         Err(e) => {
-            emit_log(app, progresses, index, total, file_name, 0.0,
-                &format!("❌ Error lanzando ffmpeg: {}\n   → original intacto en su ubicación\n", e));
+            let m = if lang == "en" {
+                format!("❌ Error launching ffmpeg: {}\n   → original intact in place\n", e)
+            } else {
+                format!("❌ Error lanzando ffmpeg: {}\n   → original intacto en su ubicación\n", e)
+            };
+            emit_log(app, progresses, index, total, file_name, 0.0, &m);
             return (false, false);
         }
     };

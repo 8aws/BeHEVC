@@ -24,6 +24,7 @@ const state = {
   ffprobePath:        null,
   isProcessing:       false,
   isScanning:         false,
+  isEstimating:       false,
   isPaused:           false,
   filesDone:          0,
   quality:            { crf: 28, preset: 'medium' },
@@ -125,8 +126,8 @@ function updateButtonStates() {
   });
 
   // Botón "Estimar ahorro": visible con el modo HEVC activo y algún HEVC seleccionado
-  const hevcSelected = state.files.some(f => f.isHevc && f.recompress);
-  btnEstimate.hidden   = !(state.optimizeHevc && hevcSelected);
+  const anyHevc = state.files.some(f => f.isHevc);
+  btnEstimate.hidden   = !(state.optimizeHevc && anyHevc);
   btnEstimate.disabled = busy;
   $('verdict-thresholds').hidden = !state.optimizeHevc;
 
@@ -349,6 +350,7 @@ async function init() {
   });
 
   await listen('estimate-done', () => {
+    state.isEstimating = false;
     btnEstimate.disabled = false;
     appendLog(t('log_estimate_done'));
     // Resumen de ahorro potencial del lote (sobre los estimados que encogen)
@@ -370,6 +372,21 @@ async function init() {
   await listen('file-optimal', ({ payload }) => {
     setFileRowStatus(payload, 'optimal');
   });
+
+  // ── Aviso al cerrar si hay tareas en marcha ────────────────────────────
+  try {
+    const win = window.__TAURI__.window.getCurrentWindow();
+    await win.onCloseRequested(async (event) => {
+      if (state.isProcessing || state.isScanning || state.isEstimating) {
+        let ok = false;
+        try {
+          const dlg = window.__TAURI__.dialog;
+          ok = dlg && dlg.ask ? await dlg.ask(t('close_warn'), { title: 'B265', kind: 'warning' }) : true;
+        } catch (_) { ok = true; }
+        if (!ok) event.preventDefault();
+      }
+    });
+  } catch (_) { /* API de ventana no disponible — sin aviso */ }
 }
 
 // formatBytes / formatEta / verdictKey viven en logic.js (cargado antes que main.js)
@@ -510,6 +527,7 @@ async function launchConversion() {
       ffprobePath:  state.ffprobePath,
       backupFolder: state.backupFolder,
       concurrency:  state.concurrency === 'auto' ? null : parseInt(state.concurrency),
+      lang:         LANG,
     });
   } catch (e) {
     appendLog(t('log_start_fail', { e }));
@@ -1064,17 +1082,19 @@ $('th-savings').addEventListener('change', e => {
 // Botón "Estimar ahorro": muestrea los HEVC seleccionados y rellena la columna Ahorro
 btnEstimate.addEventListener('click', async () => {
   if (state.isProcessing || btnEstimate.disabled) return;
+  // Estima TODOS los HEVC (no solo los marcados) para decidir mejor antes de seleccionar
   state.estimateIndexMap = {};
   const paths = [];
   let estIdx = 0;
   state.files.forEach((f, fileIdx) => {
-    if (f.isHevc && f.recompress) {
+    if (f.isHevc) {
       paths.push(f.path);
       state.estimateIndexMap[estIdx++] = fileIdx;
     }
   });
   if (!paths.length) return;
 
+  state.isEstimating = true;
   btnEstimate.disabled = true;
   estimateStatus.textContent = t('btn_estimating', { current: 0, total: paths.length });
   appendLog(t('log_estimating', { n: paths.length }));
@@ -1091,6 +1111,7 @@ btnEstimate.addEventListener('click', async () => {
     });
   } catch (e) {
     appendLog(t('log_error', { e }));
+    state.isEstimating = false;
     btnEstimate.disabled = false;
     estimateStatus.textContent = '';
   }

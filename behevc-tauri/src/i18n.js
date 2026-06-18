@@ -96,6 +96,7 @@ const I18N = {
     th_savings:       'Ahorro ≥',
     est_summary:      '{n} recomprimibles · ahorro potencial ≈ {size}',
     gen_warn:         'Vas a RECOMPRIMIR {n} archivo(s) que ya son HEVC. Recomprimir HEVC→HEVC tiene pérdida generacional de calidad. La app descartará los que no encojan. ¿Continuar?',
+    close_warn:       'Hay tareas en marcha (conversión o estimación). Si cierras ahora se interrumpirán. ¿Cerrar de todas formas?',
     // Mensajes de log (frontend)
     log_ff_detected:  '✔ ffmpeg y ffprobe detectados\n',
     log_ff_version:   '   ffmpeg {ver}\n',
@@ -221,6 +222,7 @@ const I18N = {
     th_savings:       'Savings ≥',
     est_summary:      '{n} worth recompressing · potential savings ≈ {size}',
     gen_warn:         'You are about to RECOMPRESS {n} file(s) that are already HEVC. HEVC→HEVC recompression has generational quality loss. Files that don\'t shrink will be discarded. Continue?',
+    close_warn:       'Tasks are running (conversion or estimation). Closing now will interrupt them. Close anyway?',
     log_ff_detected:  '✔ ffmpeg and ffprobe detected\n',
     log_ff_version:   '   ffmpeg {ver}\n',
     log_ff_updatedir: '   To update ffmpeg: {dir}\n',

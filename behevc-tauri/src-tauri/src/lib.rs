@@ -266,7 +266,9 @@ async fn start_conversion(
     ffprobe_path: String,
     backup_folder: Option<String>,
     concurrency: Option<usize>,
+    lang: Option<String>,
 ) -> Result<(), String> {
+    let lang = lang.unwrap_or_else(|| "es".to_string());
     // Resetear el flag de cancelación
     *state.cancelled.lock().unwrap() = false;
     *state.paused.lock().unwrap() = false;
@@ -282,22 +284,25 @@ async fn start_conversion(
     // Validar/crear la carpeta de destino ANTES de arrancar.
     // Tras reinicios o con discos externos/red desmontados, una carpeta recordada
     // puede ya no existir: damos un error claro en vez de un fallo críptico de ffmpeg.
+    let en = lang == "en";
     if let Some(dir) = jobs.first().and_then(|j| Path::new(&j.output).parent()) {
         if let Err(e) = std::fs::create_dir_all(dir) {
-            return Err(format!(
-                "No se puede acceder a la carpeta de destino:\n{}\n\n{}\n\n¿Está el disco conectado/montado?",
-                dir.display(), e
-            ));
+            return Err(if en {
+                format!("Cannot access the output folder:\n{}\n\n{}\n\nIs the disk connected/mounted?", dir.display(), e)
+            } else {
+                format!("No se puede acceder a la carpeta de destino:\n{}\n\n{}\n\n¿Está el disco conectado/montado?", dir.display(), e)
+            });
         }
         // Comprobar que realmente se puede escribir (solo lectura, red, permisos…)
         let probe = dir.join(".behevc_write_test");
         match std::fs::File::create(&probe) {
             Ok(_) => { let _ = std::fs::remove_file(&probe); }
             Err(e) => {
-                return Err(format!(
-                    "La carpeta de destino no permite escritura:\n{}\n\n{}",
-                    dir.display(), e
-                ));
+                return Err(if en {
+                    format!("The output folder is not writable:\n{}\n\n{}", dir.display(), e)
+                } else {
+                    format!("La carpeta de destino no permite escritura:\n{}\n\n{}", dir.display(), e)
+                });
             }
         }
     }
@@ -306,6 +311,7 @@ async fn start_conversion(
     // en un thread sea 'owned', no referencias)
     let app_clone = app.clone();
     let jobs_for_backup = jobs.clone();
+    let lang_for_thread = lang.clone();
 
     // std::thread::spawn: lanza un hilo del SO (no async, no bloquea el runtime de Tauri)
     std::thread::spawn(move || {
@@ -320,6 +326,7 @@ async fn start_conversion(
                 cancelled,
                 paused,
                 concurrency,
+                lang.clone(),
             )
         }));
 
@@ -356,12 +363,16 @@ async fn start_conversion(
                 }
             }
 
-            let msg = format!(
-                "✔ Backup: {} original(es) movido(s) a {}{}\n",
-                moved,
-                backup_dir,
-                if errors > 0 { format!(" ({} sin mover por error)", errors) } else { String::new() }
-            );
+            let en = lang_for_thread == "en";
+            let err_note = if errors > 0 {
+                if en { format!(" ({} not moved due to error)", errors) }
+                else  { format!(" ({} sin mover por error)", errors) }
+            } else { String::new() };
+            let msg = if en {
+                format!("✔ Backup: {} original(s) moved to {}{}\n", moved, backup_dir, err_note)
+            } else {
+                format!("✔ Backup: {} original(es) movido(s) a {}{}\n", moved, backup_dir, err_note)
+            };
             let _ = app_clone.emit("backup-done", msg);
         }
     });
