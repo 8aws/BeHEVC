@@ -6,32 +6,6 @@
 use std::path::Path;
 use std::process::Command;
 
-/// Devuelve el nombre del codec de vídeo (ej: "hevc", "h264", "vp9", "av1")
-/// Devuelve None si no puede leerlo (archivo corrupto, no es vídeo, etc.)
-pub fn detect_video_codec(path: &Path, ffprobe_path: &str) -> Option<String> {
-    let output = Command::new(ffprobe_path)
-        .args([
-            "-v", "error",                                    // Solo mostrar errores, no info extra
-            "-select_streams", "v:0",                         // Solo el primer stream de vídeo
-            "-show_entries", "stream=codec_name",             // Queremos: codec_name
-            "-of", "default=noprint_wrappers=1:nokey=1",      // Formato limpio: solo el valor
-            path.to_str()?,
-        ])
-        .output()
-        .ok()?;
-
-    let codec = String::from_utf8(output.stdout)
-        .ok()?
-        .trim()
-        .to_lowercase();
-
-    if codec.is_empty() {
-        None
-    } else {
-        Some(codec)
-    }
-}
-
 /// Devuelve true si el codec detectado YA es HEVC/H.265 (no hay que convertirlo).
 /// Opera sobre el codec ya detectado para no repetir la llamada a ffprobe.
 /// Si no se pudo detectar (None), asumimos que hay que convertirlo.
