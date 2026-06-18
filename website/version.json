@@ -1,15 +1,15 @@
 {
   "app": {
-    "version": "2.0.0",
+    "version": "3.0.0",
     "release_date": "2026-06-15",
-    "changelog": "BeHEVC 2.0: aceleración por hardware, ahorro de espacio y ETA en vivo, conversiones en paralelo, drag & drop, backup opcional, contenedor MP4/MKV, notificaciones, auto-update e i18n",
+    "changelog": "BeHEVC 3.0: recompresión inteligente de HEVC existentes — chip de margen por bitrate, precálculo de ahorro por muestreo con VMAF y veredicto (recomendado/marginal/no merece la pena), y resguardo que descarta la recompresión si no encoge (nunca empeora un archivo)",
     "downloads": {
-      "macos_arm64":   "https://b265.uverse.es/downloads/BeHEVC_2.0.0_aarch64.dmg",
-      "macos_intel":   "https://b265.uverse.es/downloads/BeHEVC_2.0.0_x64.dmg",
-      "windows_x64":   "https://b265.uverse.es/downloads/BeHEVC_2.0.0_x64-setup.exe",
-      "windows_arm64": "https://b265.uverse.es/downloads/BeHEVC_2.0.0_arm64-setup.exe",
-      "linux_x64":     "https://b265.uverse.es/downloads/BeHEVC_2.0.0_amd64.AppImage",
-      "linux_arm64":   "https://b265.uverse.es/downloads/BeHEVC_2.0.0_aarch64.AppImage"
+      "macos_arm64":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_aarch64.dmg",
+      "macos_intel":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_x64.dmg",
+      "windows_x64":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_x64-setup.exe",
+      "windows_arm64": "https://b265.uverse.es/downloads/BeHEVC_3.0.0_arm64-setup.exe",
+      "linux_x64":     "https://b265.uverse.es/downloads/BeHEVC_3.0.0_amd64.AppImage",
+      "linux_arm64":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_aarch64.AppImage"
     }
   },
   "ffmpeg": {
