@@ -7,6 +7,7 @@
 
 mod converter;
 mod detector;
+mod estimator;
 mod scanner;
 
 use std::path::{Path, PathBuf};
@@ -56,6 +57,14 @@ pub struct FileInfo {
     pub needs_conversion: bool,
     /// Ruta donde se guardará el archivo convertido
     pub output_path: String,
+    /// Tamaño del archivo en bytes
+    pub size: u64,
+    /// Bitrate del vídeo en bits/s (0 si desconocido)
+    pub bitrate: u64,
+    /// Bits por píxel por frame (None si faltan datos) — señal de sobre-codificación
+    pub bpp: Option<f64>,
+    /// Margen de recompresión para HEVC: "high" | "medium" | "low" (None si no aplica)
+    pub margin: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -217,10 +226,10 @@ async fn scan_files(
                 file: file.file_name().and_then(|n| n.to_str()).unwrap_or("?").to_string(),
             });
 
-            // Preguntamos a ffprobe qué codec tiene (una sola llamada);
-            // "ya es HEVC" se deriva del codec detectado.
-            let codec = detector::detect_video_codec(&file, &ffprobe_path);
-            let already_hevc = detector::is_hevc(codec.as_deref());
+            // Sonda única: codec + resolución + fps + bitrate + duración → BPP y margen.
+            let info = detector::probe_media(&file, &ffprobe_path);
+            let already_hevc = detector::is_hevc(info.codec.as_deref());
+            let size = std::fs::metadata(&file).map(|m| m.len()).unwrap_or(0);
 
             let stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
             let output_name = format!("{}.hevc.{}", stem, container);
@@ -229,9 +238,13 @@ async fn scan_files(
             results.push(FileInfo {
                 path: file.to_string_lossy().to_string(),
                 name: file.file_name().and_then(|n| n.to_str()).unwrap_or("?").to_string(),
-                codec,
+                codec: info.codec,
                 needs_conversion: !already_hevc,
                 output_path: output_path.to_string_lossy().to_string(),
+                size,
+                bitrate: info.bitrate,
+                bpp: info.bpp,
+                margin: info.margin,
             });
         }
 
@@ -370,6 +383,26 @@ fn pause_conversion(state: State<'_, AppState>) {
     *state.paused.lock().unwrap() = true;
 }
 
+/// Precálculo de ahorro por muestreo (3.0). Lanza el análisis en un hilo aparte;
+/// el progreso/resultados llegan por eventos `estimate-progress`/`estimate-result`/`estimate-done`.
+#[tauri::command]
+async fn estimate_savings(
+    app: AppHandle,
+    paths: Vec<String>,
+    settings: converter::ConversionSettings,
+    ffmpeg_path: String,
+    ffprobe_path: String,
+    concurrency: Option<usize>,
+    vmaf: Option<bool>,
+) -> Result<(), String> {
+    let concurrency = concurrency.unwrap_or_else(default_concurrency).max(1);
+    let with_vmaf = vmaf.unwrap_or(true);
+    std::thread::spawn(move || {
+        estimator::run_estimation(app, paths, settings, ffmpeg_path, ffprobe_path, concurrency, with_vmaf);
+    });
+    Ok(())
+}
+
 /// Abre una carpeta en el explorador de archivos nativo del sistema
 #[tauri::command]
 fn open_folder(path: String) {
@@ -481,6 +514,7 @@ pub fn run() {
             start_conversion,
             cancel_conversion,
             pause_conversion,
+            estimate_savings,
             open_folder,
             open_url,
             list_hw_encoders,

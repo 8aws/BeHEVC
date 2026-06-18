@@ -32,7 +32,9 @@ const state = {
   audio:              'copy',
   concurrency:        'auto',   // 'auto' | número de conversiones simultáneas
   lang:               'es',     // idioma de la UI: 'es' | 'en'
+  optimizeHevc:       false,    // recomprimir HEVC existentes (3.0)
   jobIndexMap:        {},   // jobIdx → fileIdx en state.files
+  estimateIndexMap:   {},   // estIdx → fileIdx (precálculo 3.0)
   lastConvertingIdx:  -1,   // último file_index visto en conversion-progress
   totalOriginal:      0,    // bytes acumulados de originales convertidos
   totalOutput:        0,    // bytes acumulados de salidas convertidas
@@ -52,6 +54,8 @@ const btnCancel         = $('btn-cancel');
 const btnOpenOutput     = $('btn-open-output');
 const btnNewSession     = $('btn-new-session');
 const btnCheckUpdate    = $('btn-check-update');
+const btnEstimate       = $('btn-estimate');
+const estimateStatus    = $('estimate-status');
 const ffmpegVersion     = $('ffmpeg-version');
 const allHevcNotice     = $('all-hevc-notice');
 const ffmpegStatus      = $('ffmpeg-status');
@@ -115,6 +119,11 @@ function updateButtonStates() {
   [btnOutput, btnAddFiles, btnAddFolder, btnBackup].forEach(btn => {
     btn.style.opacity = btn.disabled ? '0.28' : '1';
   });
+
+  // Botón "Estimar ahorro": visible con el modo HEVC activo y algún HEVC seleccionado
+  const hevcSelected = state.files.some(f => f.isHevc && f.recompress);
+  btnEstimate.hidden   = !(state.optimizeHevc && hevcSelected);
+  btnEstimate.disabled = busy;
 }
 
 // ── Inicialización ────────────────────────────────────────────────────────
@@ -212,6 +221,8 @@ async function init() {
       setFileRowStatus(payload.file_index, 'done');
     } else if (trimmed.startsWith('❌')) {
       setFileRowStatus(payload.file_index, 'error');
+    } else if (trimmed.startsWith('↔')) {
+      // "ya óptimo" — lo gestiona el evento file-optimal; no tocar la fila aquí
     } else if (payload.file_progress >= 0) {
       // Progreso en vivo — soporta varias filas a la vez (modo paralelo)
       setFileRowStatus(payload.file_index, 'converting', payload.file_progress);
@@ -300,6 +311,41 @@ async function init() {
   // ── backup-done ───────────────────────────────────────────────────────
   await listen('backup-done', ({ payload }) => {
     appendLog(payload);
+  });
+
+  // ── Precálculo de ahorro (3.0) ─────────────────────────────────────────
+  await listen('estimate-progress', ({ payload }) => {
+    estimateStatus.textContent = t('btn_estimating', { current: payload.current, total: payload.total });
+  });
+
+  await listen('estimate-result', ({ payload }) => {
+    const fileIdx = state.estimateIndexMap[payload.index];
+    if (fileIdx === undefined) return;
+    const f = state.files[fileIdx];
+    if (!f) return;
+    if (payload.ok) {
+      f.estSavings = payload.savings_pct;
+      f.estSize    = payload.estimated_size;
+      f.estVmaf    = payload.vmaf;   // puede ser null si libvmaf no está
+      f.estFail    = false;
+    } else {
+      f.estSavings = null;
+      f.estFail    = true;
+    }
+    const row = fileListBody.querySelector(`tr[data-file-index="${fileIdx}"]`);
+    if (row) row.querySelector('.col-savings').innerHTML = estChip(f) || marginChip(f);
+  });
+
+  await listen('estimate-done', () => {
+    estimateStatus.textContent = '';
+    btnEstimate.disabled = false;
+    appendLog(t('log_estimate_done'));
+    updateButtonStates();
+  });
+
+  // ── file-optimal: recompresión que no encogía → original conservado ────
+  await listen('file-optimal', ({ payload }) => {
+    setFileRowStatus(payload, 'optimal');
   });
 }
 
@@ -390,7 +436,7 @@ async function launchConversion() {
   let jobIdx = 0;
   state.files.forEach((f, fileIdx) => {
     if (f.needs_conversion && f.status !== 'done' && f.status !== 'error') {
-      jobs.push({ input: f.path, output: f.output_path });
+      jobs.push({ input: f.path, output: f.output_path, recompress: !!f.isHevc });
       state.jobIndexMap[jobIdx] = fileIdx;
       jobIdx++;
     }
@@ -500,6 +546,7 @@ function showCompletionBanner() {
   const converted = state.files.filter(f => f.status === 'done').length;
   const skipped   = state.files.filter(f => f.status === 'skipped').length;
   const errors    = state.files.filter(f => f.status === 'error').length;
+  const optimal   = state.files.filter(f => f.status === 'optimal').length;
 
   const lines = [];
   lines.push(t('sum_converted', { n: converted, dir: state.outputFolder }));
@@ -512,6 +559,8 @@ function showCompletionBanner() {
     lines.push(t('sum_backup', { dir: state.backupFolder }));
   if (skipped > 0)
     lines.push(t('sum_skipped', { n: skipped }));
+  if (optimal > 0)
+    lines.push(t('sum_optimal', { n: optimal }));
   if (errors > 0)
     lines.push(t('sum_errors', { n: errors }));
 
@@ -552,9 +601,13 @@ async function analyzeFiles(paths) {
       if (!state.files.find(e => e.path === f.path)) {
         // Estado por archivo: pending | queued | converting | done | skipped | error
         f.status = f.needs_conversion ? 'pending' : 'skipped';
+        // 3.0: HEVC con margen alto/medio se marcan para recomprimir por defecto
+        f.isHevc = f.codec === 'hevc';
+        f.recompress = f.isHevc && (f.margin === 'high' || f.margin === 'medium');
         state.files.push(f);
       }
     }
+    applyHevcSelection();
 
     const n = files.filter(f => f.needs_conversion).length;
     const s = files.length - n;
@@ -568,6 +621,22 @@ async function analyzeFiles(paths) {
   renderFileList();
   updateStats();
   updateButtonStates();
+}
+
+// ── Selección de recompresión HEVC (3.0) ───────────────────────────────────
+//
+// Reutiliza `needs_conversion` como bandera única de "se convertirá": un HEVC
+// pasa a needs_conversion=true solo si el modo está activo y está marcado.
+
+function applyHevcSelection() {
+  state.files.forEach(f => {
+    if (!f.isHevc) return;
+    // No tocar archivos ya en marcha o finalizados
+    if (['done', 'error', 'converting', 'queued'].includes(f.status)) return;
+    const on = state.optimizeHevc && f.recompress;
+    f.needs_conversion = on;
+    f.status = on ? 'pending' : 'skipped';
+  });
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
@@ -588,12 +657,60 @@ function renderFileList() {
     tr.dataset.fileIndex = index;
     const codec = f.codec || '?';
     tr.innerHTML = `
+      <td class="col-sel">${selCell(f)}</td>
       <td class="col-name" title="${f.path}">${f.name}</td>
       <td class="col-codec">${codec}</td>
       <td class="col-status">${badgeFor(f)}</td>
-      <td class="col-savings">${f.savings || ''}</td>`;
+      <td class="col-savings">${f.savings || estChip(f) || marginChip(f)}</td>`;
     fileListBody.appendChild(tr);
   });
+}
+
+// Veredicto del precálculo a partir de ahorro y VMAF.
+function estVerdict(f) {
+  const s = f.estSavings, v = f.estVmaf;
+  if (s < 0)                          return { cls: 'est-bad', label: t('verdict_notworth') };
+  if (v != null && v < 90)            return { cls: 'est-bad', label: t('verdict_loss') };
+  if (s >= 15 && (v == null || v >= 93)) return { cls: 'est-good', label: t('verdict_recommended') };
+  if (s < 10)                         return { cls: 'est-low', label: t('verdict_notworth') };
+  return { cls: 'est-mid', label: t('verdict_marginal') };
+}
+
+// Chip de ahorro estimado por muestreo + VMAF + veredicto (precálculo 3.0).
+function estChip(f) {
+  if (f.estFail) return `<span class="margin margin-low">${t('est_fail')}</span>`;
+  if (f.estSavings === null || f.estSavings === undefined) return '';
+
+  // Caso "no encoge": saldría más grande
+  if (f.estSavings < 0) {
+    const tip = `${formatBytes(f.size || 0)} → ${formatBytes(f.estSize || 0)} · ${t('verdict_notworth')}`;
+    return `<span class="est est-bad" title="${tip}">${t('est_bigger', { pct: Math.abs(f.estSavings).toFixed(0) })}</span>`;
+  }
+
+  const verdict = estVerdict(f);
+  const main = `≈ −${f.estSavings.toFixed(0)}%`;
+  const extra = (f.estVmaf != null) ? ` · VMAF ${f.estVmaf.toFixed(0)}` : ` · ${formatBytes(f.estSize || 0)}`;
+  const vmafTxt = (f.estVmaf != null) ? ` · VMAF ${f.estVmaf.toFixed(1)}` : '';
+  const tip = `${formatBytes(f.size || 0)} → ${formatBytes(f.estSize || 0)}${vmafTxt} · ${verdict.label}`;
+  return `<span class="est ${verdict.cls}" title="${tip}">${main}${extra}</span>`;
+}
+
+// Casilla de selección por fila. Los HEVC son elegibles solo con el modo activo;
+// los no-HEVC siempre se convierten (casilla marcada y deshabilitada).
+function selCell(f) {
+  if (f.isHevc) {
+    if (!state.optimizeHevc) return '';   // modo apagado → sin casilla
+    return `<input type="checkbox" class="sel-box" ${f.recompress ? 'checked' : ''}>`;
+  }
+  return `<input type="checkbox" checked disabled title="${t('badge_convert')}">`;
+}
+
+// Chip de "margen de recompresión" para archivos HEVC (señal de sobre-codificación).
+function marginChip(f) {
+  if (!f.margin) return '';
+  const br  = f.bitrate ? (f.bitrate / 1e6).toFixed(1) + ' Mbps' : '?';
+  const bpp = f.bpp ? f.bpp.toFixed(3) : '?';
+  return `<span class="margin margin-${f.margin}" title="${t('margin_title', { bpp, br })}">${t('margin_' + f.margin)}</span>`;
 }
 
 // Devuelve el HTML del badge de estado de un archivo (traducido).
@@ -602,12 +719,17 @@ function badgeFor(f) {
     case 'done':       return `<span class="badge badge-done">${t('badge_done')}</span>`;
     case 'error':      return `<span class="badge badge-error">${t('badge_error')}</span>`;
     case 'skipped':    return `<span class="badge badge-skip">${t('badge_skip')}</span>`;
+    case 'optimal':    return `<span class="badge badge-skip">${t('badge_optimal')}</span>`;
     case 'queued':     return `<span class="badge badge-queue">${t('badge_queue')}</span>`;
     case 'converting': return `<span class="badge badge-converting">⟳ ${t('badge_converting')}</span>`;
     default:
-      return f.needs_conversion
-        ? `<span class="badge badge-convert">${t('badge_convert')}</span>`
-        : `<span class="badge badge-skip">${t('badge_skip')}</span>`;
+      if (f.needs_conversion) {
+        // HEVC marcado para recomprimir → badge distinto
+        return f.isHevc
+          ? `<span class="badge badge-convert">${t('badge_recompress')}</span>`
+          : `<span class="badge badge-convert">${t('badge_convert')}</span>`;
+      }
+      return `<span class="badge badge-skip">${t('badge_skip')}</span>`;
   }
 }
 
@@ -641,6 +763,9 @@ function setFileRowStatus(jobIndex, status, progress) {
       break;
     case 'error':
       cell.innerHTML = `<span class="badge badge-error">${t('badge_error')}</span>`;
+      break;
+    case 'optimal':
+      cell.innerHTML = `<span class="badge badge-skip">${t('badge_optimal')}</span>`;
       break;
   }
 }
@@ -850,6 +975,69 @@ $('concurrency-group').addEventListener('click', e => {
   saveSettings();
 });
 
+// ── Modo "Optimizar HEVC existentes" (3.0) ──────────────────────────────────
+
+$('opt-hevc').addEventListener('change', e => {
+  if (state.isProcessing) { e.target.checked = state.optimizeHevc; return; }
+  state.optimizeHevc = e.target.checked;
+  applyHevcSelection();
+  renderFileList();
+  updateStats();
+  updateButtonStates();
+  saveSettings();
+});
+
+// Botón "Estimar ahorro": muestrea los HEVC seleccionados y rellena la columna Ahorro
+btnEstimate.addEventListener('click', async () => {
+  if (state.isProcessing || btnEstimate.disabled) return;
+  state.estimateIndexMap = {};
+  const paths = [];
+  let estIdx = 0;
+  state.files.forEach((f, fileIdx) => {
+    if (f.isHevc && f.recompress) {
+      paths.push(f.path);
+      state.estimateIndexMap[estIdx++] = fileIdx;
+    }
+  });
+  if (!paths.length) return;
+
+  btnEstimate.disabled = true;
+  estimateStatus.textContent = t('btn_estimating', { current: 0, total: paths.length });
+  appendLog(t('log_estimating', { n: paths.length }));
+
+  const q = state.quality;
+  try {
+    await invoke('estimate_savings', {
+      paths,
+      settings:    { encoder: state.encoder, crf: q.crf, preset: q.preset, audio: state.audio },
+      ffmpegPath:  state.ffmpegPath,
+      ffprobePath: state.ffprobePath,
+      concurrency: state.concurrency === 'auto' ? null : parseInt(state.concurrency),
+      vmaf:        true,
+    });
+  } catch (e) {
+    appendLog(t('log_error', { e }));
+    btnEstimate.disabled = false;
+    estimateStatus.textContent = '';
+  }
+});
+
+// Casillas de selección por fila (delegación; sobreviven a los re-render)
+fileListBody.addEventListener('change', e => {
+  const box = e.target.closest('.sel-box');
+  if (!box || state.isProcessing) return;
+  const row = box.closest('tr');
+  const fi  = parseInt(row?.dataset.fileIndex);
+  const f   = state.files[fi];
+  if (!f) return;
+  f.recompress = box.checked;
+  applyHevcSelection();
+  row.querySelector('.col-status').innerHTML  = badgeFor(f);
+  row.querySelector('.col-savings').innerHTML = f.savings || marginChip(f);
+  updateStats();
+  updateButtonStates();
+});
+
 // ── Selector de idioma ──────────────────────────────────────────────────────
 
 document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -916,6 +1104,7 @@ function saveSettings() {
       audio:        state.audio,
       concurrency:  state.concurrency,
       lang:         LANG,
+      optimizeHevc: state.optimizeHevc,
       outputFolder: state.outputFolder,
       backupFolder: state.backupFolder,
     }));
@@ -957,6 +1146,9 @@ function loadSettings() {
   }
   // Encoder por defecto (los de hardware se restauran tras detectarlos)
   if (s.encoder) state.encoder = s.encoder;
+  // Modo optimizar HEVC (3.0)
+  state.optimizeHevc = !!s.optimizeHevc;
+  $('opt-hevc').checked = state.optimizeHevc;
   // Carpetas
   if (s.outputFolder) {
     state.outputFolder = s.outputFolder;

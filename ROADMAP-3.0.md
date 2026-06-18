@@ -11,76 +11,82 @@ Estado: ☐ pendiente · ◐ en curso · ☑ hecho.
 
 ---
 
-## Fase 1 — Métricas de origen en el análisis (instantáneo)
+## Fase 1 — Métricas de origen en el análisis (instantáneo)  ☑
 
-Ampliar el escaneo (`detector.rs` / `scan_files`) para extraer de ffprobe, en la misma
-pasada, datos del stream de vídeo: `bit_rate` (o `format.bit_rate`), `width`, `height`,
-`r_frame_rate`, `pix_fmt`, `duration`, y el `tag`/encoder si está disponible.
+- ☑ `detector::probe_media`: una sola llamada a ffprobe (JSON) saca codec, width, height,
+  r_frame_rate, bit_rate (stream o formato), pix_fmt y duración. Sustituye a las 2 llamadas
+  previas (codec + duración) en el escaneo.
+- ☑ Calcular **BPP** = `bitrate / (width·height·fps)`.
+- ☑ Clasificar margen (`recompress_margin`): ≥0.10 alto · 0.05–0.10 medio · <0.05 bajo.
+- ☑ Campos `size`, `bitrate`, `bpp`, `margin` añadidos a `FileInfo` y enviados al frontend.
+- ☑ Frontend: chip de margen (alto/medio/bajo) en los HEVC, con tooltip de BPP/bitrate.
+- ☑ Tests de `parse_fps` y `recompress_margin` (16 tests verdes en total).
+- Coste: cero (ffprobe ya se ejecutaba); sin cambios de comportamiento de conversión.
 
-- ☐ Calcular **BPP** (bits por píxel por frame) = `bitrate / (width·height·fps)`.
-- ☐ Clasificar margen de recompresión por BPP (umbral orientativo para HEVC):
-  - BPP ≳ 0.10 → **margen alto** (probable hardware-encode o bitrate excesivo)
-  - 0.05–0.10 → **margen medio**
-  - < 0.05 → **margen bajo** (ya eficiente)
-- ☐ Añadir estos campos a `FileInfo` y enviarlos al frontend.
-- ☐ Coste: cero (ffprobe ya se ejecuta). Solo lectura de metadatos.
+## Fase 2 — Modo "Optimizar HEVC existentes" (UI/flujo)  ☑
 
-## Fase 2 — Modo "Optimizar HEVC existentes" (UI/flujo)
+- ☑ Toggle **apagado por defecto**; al activarlo los HEVC dejan de saltarse y pasan a candidatos.
+- ☑ Etiqueta de margen (chip) ya visible desde la Fase 1.
+- ☑ **Selección por archivo con checkbox**: marcados por defecto los de margen alto/medio,
+  desmarcados los de bajo; no-HEVC siempre marcados (deshabilitado).
+- ☑ Reutiliza `needs_conversion` como bandera única de "se convertirá" (vía `applyHevcSelection`),
+  así el pipeline 2.0 (jobs, stats, badges, pausa) funciona sin cambios; badge "Recomprimir".
+- ☑ Persistido en localStorage; i18n ES/EN de las cadenas nuevas.
 
-- ☐ Toggle **apagado por defecto**. Con él, los HEVC dejan de saltarse y pasan a candidatos.
-- ☐ En la lista, mostrar la etiqueta de margen (alto/medio/bajo) en los HEVC candidatos.
-- ☐ Selección por archivo: el usuario decide cuáles entran al precálculo / recompresión.
-- ☐ Persistir el toggle (localStorage, como el resto de ajustes).
-- ☐ i18n ES/EN de todas las cadenas nuevas.
+> Nota: ya se pueden recomprimir HEVC seleccionados, pero **basado solo en el margen BPP**
+> (rápido pero orientativo). El tamaño/calidad estimados (Fases 3-4) y el resguardo
+> "descartar si no encoge / VMAF bajo" (Fase 6) son los siguientes pasos.
 
-## Fase 3 — Precálculo por muestreo (tamaño estimado)
+## Fase 3 — Precálculo por muestreo (tamaño estimado)  ☑
 
-Command nuevo (p. ej. `estimate_savings`) que para cada archivo:
+- ☑ Módulo `estimator.rs` + command `estimate_savings`.
+- ☑ **N=3 muestras** de ~4 s al 10/50/90% con los ajustes objetivo (reusa
+  `converter::append_video_codec_args`); seek de entrada rápido (`-ss` antes de `-i`).
+- ☑ Extrapola `est_total = (bytes_muestras / seg_muestreados) · duración_total`; calcula `ahorro%`.
+- ☑ Pool de trabajadores en paralelo; eventos `estimate-progress` / `estimate-result` / `estimate-done`.
+- ☑ Limpieza de temporales.
+- ☑ Frontend: botón **"Estimar ahorro"** (visible con modo HEVC + selección), chips de ahorro
+  estimado en la columna Ahorro (verde/amarillo/rojo según %, y "no encoge" si saldría mayor).
+- ☑ Test de `build_sample_args` (seek antes del input). i18n ES/EN.
+- Exactitud ±10–15% (variación entre escenas) → mostrado como estimación (`≈`).
 
-- ☐ Toma **N=3 muestras** de ~4 s en posiciones 10% / 50% / 90% de la duración
-  (`ffmpeg -ss <pos> -t 4 -i in … out_muestra`), con los **ajustes objetivo** (CRF/preset/encoder).
-- ☐ Suma bytes de las muestras y **extrapola**: `est_total = (bytes_muestras / seg_muestreados) · duración_total`.
-- ☐ `ahorro% = 1 − est_total / tamaño_original`.
-- ☐ Corre en el **pool en paralelo** ya existente; emite progreso por archivo.
-- ☐ Limpieza de los temporales de muestra.
-- ☐ Exactitud esperada ±10–15% (variación entre escenas) → etiquetar como *estimación*.
+## Fase 4 — Calidad real con VMAF  ☑
 
-## Fase 4 — Calidad real con VMAF
+- ☑ Por cada muestra, VMAF del trozo recomprimido vs el original (`-lavfi "[0:v][1:v]libvmaf"`),
+  promediado. Score leído de stderr ("VMAF score:") para evitar escapes de rutas (Windows).
+- ☑ Degradación elegante: si libvmaf no está/falla, `vmaf = None` y se muestra tamaño en su lugar.
+- ☑ Parámetro `vmaf: bool` en el command (modo rápido sin VMAF disponible para el futuro).
+- ☑ Mostrado junto al ahorro en el chip; test de `parse_vmaf`.
 
-- ☐ Detección runtime de `libvmaf` (como `list_hw_encoders`): `ffmpeg -filters | grep libvmaf`.
-  Si no está, se omite la columna de calidad (degradación elegante).
-- ☐ Por cada muestra, calcular **VMAF** del trozo recomprimido vs el trozo original
-  (`-lavfi "[0:v][1:v]libvmaf"`), promediar.
-- ☐ Mostrar el VMAF medio junto al ahorro.
-- ☐ (Opcional) modo "rápido" sin VMAF para ir más ligero.
+## Fase 5 — Veredicto y presentación  ◐
 
-## Fase 5 — Veredicto y presentación
-
-- ☐ Columnas nuevas: *Tamaño est.* · *Ahorro* · *VMAF* · *Veredicto*.
-- ☐ Chip de veredicto automático:
-  - **Recomendado**: ahorro ≥ 15% y VMAF ≥ 93.
-  - **Marginal**: ahorro 10–15% o VMAF 90–93.
-  - **No merece la pena**: ahorro < 10%.
-  - **⚠ Pérdida notable**: VMAF < 90.
+- ☑ Chip de ahorro+VMAF en la columna Ahorro, coloreado por **veredicto** (`estVerdict`):
+  - **Recomendado** (verde): ahorro ≥ 15% y VMAF ≥ 93 (o sin VMAF).
+  - **Marginal** (amarillo): ahorro 10–15% o VMAF 90–93.
+  - **No merece la pena** (gris): ahorro < 10%.
+  - **Pérdida de calidad** (rojo): VMAF < 90; y "no encoge" si saldría más grande.
+  - Tooltip con `orig → est · VMAF · veredicto`.
 - ☐ Umbrales configurables (avanzado).
 - ☐ Resumen de lote: "Recomprimibles: 12 · ahorro potencial estimado: 8,4 GB".
 
-## Fase 6 — Recompresión segura
+## Fase 6 — Recompresión segura  ◐
 
-- ☐ Recodificar solo los archivos elegidos, reusando toda la maquinaria 2.0
-  (paralelo, pausa, backup, validación, métricas reales).
-- ☐ **Preservar 10-bit / HDR**: mantener `pix_fmt` y metadatos de color
-  (`-pix_fmt`, transfer/primaries/matrix, `-color_*`) — crítico en HEVC HDR.
-- ☐ Validación reforzada: si el resultado real es mayor que el original, descartarlo
-  y conservar el original (nunca empeorar).
-- ☐ Aviso claro de pérdida generacional antes de recomprimir en lote.
+- ☑ Recodifica solo los elegidos reusando toda la maquinaria 2.0 (paralelo, pausa, backup,
+  validación, métricas reales). `ConversionJob.recompress` marca los HEVC.
+- ☑ **Resguardo "nunca empeorar"**: si una recompresión NO encoge (`output ≥ original`),
+  se descarta el resultado y se conserva el original. Evento `file-optimal` → badge
+  "↔ Ya óptimo" + línea de resumen; no se mueve a backup.
+- ☑ **10-bit preservado**: no se fuerza `-pix_fmt`, libx265 mantiene la profundidad del origen.
+- ◐ **HDR**: ffmpeg propaga las etiquetas de color por defecto; el forzado explícito de
+  primaries/transfer/matrix + metadata de mastering display queda como follow-up si surge algún caso.
+- ☐ Aviso de pérdida generacional antes de recomprimir en lote (pendiente, menor).
 
-## Fase 7 — Calidad (tests)
+## Fase 7 — Calidad (tests)  ◐
 
-- ☐ Tests de cálculo de BPP y clasificación de margen.
-- ☐ Tests de extrapolación de tamaño (con datos sintéticos).
-- ☐ Test de parseo de la salida de VMAF.
-- ☐ Tests de los umbrales de veredicto.
+- ☑ Tests de BPP/margen (`recompress_margin`, `parse_fps`).
+- ☑ Test de args de muestra (`build_sample_args`) y de parseo de VMAF (`parse_vmaf`). (18 tests en total)
+- ☐ Tests de extrapolación de tamaño (con datos sintéticos) y de umbrales de veredicto (en JS).
+- ☐ Smoke test en CI con un clip de muestra (compartido con la 2.0).
 
 ---
 

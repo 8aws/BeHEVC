@@ -18,6 +18,10 @@ use crate::detector::get_duration;
 pub struct ConversionJob {
     pub input: String,
     pub output: String,
+    /// true si es una recompresión de un HEVC existente (3.0). En ese caso, si el
+    /// resultado no es más pequeño que el original, se descarta y se conserva el original.
+    #[serde(default)]
+    pub recompress: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -283,6 +287,18 @@ fn process_one_file(
         // Tamaños para calcular el ahorro de espacio
         let original_size = std::fs::metadata(input_path).map(|m| m.len()).unwrap_or(0);
         let output_size   = std::fs::metadata(&job.output).map(|m| m.len()).unwrap_or(0);
+
+        // Seguridad de recompresión (3.0): si recomprimir un HEVC NO encoge, descartar
+        // el resultado y conservar el original intacto. Nunca empeorar un archivo.
+        if job.recompress && original_size > 0 && output_size >= original_size {
+            let _ = std::fs::remove_file(&job.output);
+            let _ = app.emit("file-optimal", index);
+            emit_log(app, progresses, index, total, &file_name, 1.0,
+                &format!("↔ {} ya estaba óptimo: recomprimir no ahorra ({} → {}); original conservado\n",
+                    file_name, human_size(original_size), human_size(output_size)));
+            return false; // no cuenta como convertido; el original no se mueve a backup
+        }
+
         let _ = app.emit("file-done", FileDoneEvent {
             file_index: index, original_size, output_size,
         });
@@ -556,7 +572,7 @@ fn build_ffmpeg_args(
 /// El usuario elige la calidad en escala CRF (22/28/34 ≈ alta/equilibrado/más
 /// compresión). Cada encoder de hardware usa su propia escala de calidad, así
 /// que mapeamos el CRF al parámetro equivalente de cada uno.
-fn append_video_codec_args(args: &mut Vec<String>, s: &ConversionSettings) {
+pub(crate) fn append_video_codec_args(args: &mut Vec<String>, s: &ConversionSettings) {
     let crf = s.crf.to_string();
 
     match s.encoder.as_str() {

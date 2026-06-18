@@ -68,6 +68,7 @@
       <table class="file-list" id="file-table" hidden>
         <thead>
           <tr>
+            <th class="col-sel"></th>
             <th class="col-name" data-i18n="col_name">Archivo</th>
             <th class="col-codec" data-i18n="col_codec">Codec</th>
             <th class="col-status" data-i18n="col_status">Estado</th>
@@ -126,6 +127,16 @@
         <button class="opt-btn" data-concurrency="4">4</button>
       </div>
       <span class="cpu-hint" id="cpu-hint"></span>
+    </div>
+
+    <!-- ── Optimizar HEVC existentes (3.0) ────────────────────────────── -->
+    <div class="quality-row">
+      <label class="opt-check" data-i18n-title="opt_hevc_title">
+        <input type="checkbox" id="opt-hevc" />
+        <span data-i18n="opt_hevc">Optimizar HEVC existentes</span>
+      </label>
+      <button id="btn-estimate" class="btn-outline btn-estimate" hidden data-i18n="btn_estimate">Estimar ahorro</button>
+      <span id="estimate-status" class="cpu-hint"></span>
     </div>
 
     <!-- ── Acciones ──────────────────────────────────────────────────── -->
