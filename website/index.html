@@ -155,6 +155,26 @@
     }
     .other-grid.open { max-height: 400px; opacity: 1; margin-top: 12px; }
 
+    /* Versiones anteriores */
+    .prev-grid {
+      max-height: 0; overflow: hidden; opacity: 0;
+      transition: max-height 0.35s ease, opacity 0.3s ease, margin-top 0.3s;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .prev-grid.open { max-height: 600px; opacity: 1; margin-top: 12px; }
+    .prev-row {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 10px 16px;
+    }
+    .prev-ver { font-weight: 700; color: var(--text); min-width: 56px; }
+    .prev-links { display: flex; flex-wrap: wrap; gap: 14px; }
+    .prev-links a {
+      font-size: 13px; color: var(--text-mid); text-decoration: none;
+      border-bottom: 1px dotted var(--border-mid);
+    }
+    .prev-links a:hover { color: var(--orange); border-color: var(--orange); }
+
     /* Tarjeta variante (más compacta) */
     .download-card-alt {
       background: var(--bg3); border: 1px solid var(--border);
@@ -459,6 +479,16 @@
       </div>
     </div>
 
+    <!-- Versiones anteriores (se rellena desde version.json → app.previous) -->
+    <div class="other-versions" id="prev-versions" hidden>
+      <button class="other-toggle" id="prev-toggle" onclick="togglePrev()">
+        <i class="arrow">▾</i>
+        <span data-lang="en">Previous versions</span>
+        <span data-lang="es">Versiones anteriores</span>
+      </button>
+      <div class="prev-grid" id="prev-grid"></div>
+    </div>
+
     <p class="version-info">
       <span data-lang="en">Version <strong id="ver-display">…</strong> &nbsp;·&nbsp; <a href="version.json">version.json</a> &nbsp;·&nbsp; <a href="https://github.com/8aws/BeHEVC" target="_blank">GitHub</a></span>
       <span data-lang="es">Versión <strong id="ver-display-es">…</strong> &nbsp;·&nbsp; <a href="version.json">version.json</a> &nbsp;·&nbsp; <a href="https://github.com/8aws/BeHEVC" target="_blank">GitHub</a></span>
@@ -531,6 +561,13 @@
   function toggleOther() {
     const grid   = document.getElementById('other-grid');
     const toggle = document.getElementById('other-toggle');
+    const open   = grid.classList.toggle('open');
+    toggle.classList.toggle('open', open);
+  }
+
+  function togglePrev() {
+    const grid   = document.getElementById('prev-grid');
+    const toggle = document.getElementById('prev-toggle');
     const open   = grid.classList.toggle('open');
     toggle.classList.toggle('open', open);
   }
@@ -623,10 +660,36 @@
         const el = document.getElementById(id);
         if (el) el.textContent = ver;
       });
+
+      // Versiones anteriores (app.previous)
+      renderPrevious(data.app.previous || []);
     } catch(e) {
       // Si falla el fetch (desarrollo local sin servidor), no rompemos nada
       console.warn('version.json no disponible:', e);
     }
+  }
+
+  // Rellena el desplegable de versiones anteriores desde version.json
+  function renderPrevious(prev) {
+    const section = document.getElementById('prev-versions');
+    const grid    = document.getElementById('prev-grid');
+    if (!prev.length) { section.hidden = true; return; }
+
+    const plats = [
+      ['macos_arm64', 'macOS ARM'], ['macos_intel', 'macOS Intel'],
+      ['windows_x64', 'Win x64'],   ['windows_arm64', 'Win ARM'],
+      ['linux_x64', 'Linux x64'],   ['linux_arm64', 'Linux ARM'],
+    ];
+    grid.innerHTML = prev.map(v => {
+      const d = v.downloads || {};
+      const links = plats
+        .filter(([k]) => d[k])
+        .map(([k, label]) => `<a href="${d[k]}">${label}</a>`)
+        .join('');
+      return `<div class="prev-row"><span class="prev-ver">v${v.version}</span>` +
+             `<span class="prev-links">${links}</span></div>`;
+    }).join('');
+    section.hidden = false;
   }
 
   loadVersionData();

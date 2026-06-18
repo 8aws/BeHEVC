@@ -10,7 +10,31 @@
       "windows_arm64": "https://b265.uverse.es/downloads/BeHEVC_3.0.0_arm64-setup.exe",
       "linux_x64":     "https://b265.uverse.es/downloads/BeHEVC_3.0.0_amd64.AppImage",
       "linux_arm64":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_aarch64.AppImage"
-    }
+    },
+    "previous": [
+      {
+        "version": "2.0.0",
+        "downloads": {
+          "macos_arm64":   "https://b265.uverse.es/downloads/BeHEVC_2.0.0_aarch64.dmg",
+          "macos_intel":   "https://b265.uverse.es/downloads/BeHEVC_2.0.0_x64.dmg",
+          "windows_x64":   "https://b265.uverse.es/downloads/BeHEVC_2.0.0_x64-setup.exe",
+          "windows_arm64": "https://b265.uverse.es/downloads/BeHEVC_2.0.0_arm64-setup.exe",
+          "linux_x64":     "https://b265.uverse.es/downloads/BeHEVC_2.0.0_amd64.AppImage",
+          "linux_arm64":   "https://b265.uverse.es/downloads/BeHEVC_2.0.0_aarch64.AppImage"
+        }
+      },
+      {
+        "version": "0.1.1",
+        "downloads": {
+          "macos_arm64":   "https://b265.uverse.es/downloads/BeHEVC_0.1.1_aarch64.dmg",
+          "macos_intel":   "https://b265.uverse.es/downloads/BeHEVC_0.1.1_x64.dmg",
+          "windows_x64":   "https://b265.uverse.es/downloads/BeHEVC_0.1.1_x64-setup.exe",
+          "windows_arm64": "https://b265.uverse.es/downloads/BeHEVC_0.1.1_arm64-setup.exe",
+          "linux_x64":     "https://b265.uverse.es/downloads/BeHEVC_0.1.1_amd64.AppImage",
+          "linux_arm64":   "https://b265.uverse.es/downloads/BeHEVC_0.1.1_aarch64.AppImage"
+        }
+      }
+    ]
   },
   "ffmpeg": {
     "recommended_version": "8.1.1",
