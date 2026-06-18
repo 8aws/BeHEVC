@@ -45,6 +45,15 @@ const I18N = {
     lbl_format:     'Formato',
     lbl_audio:      'Audio',
     audio_original: 'Original',
+    lbl_resolution: 'Resolución',
+    res_original:   'Original',
+    lbl_profile:    'Perfil',
+    profile_ph:     'Nombre del perfil…',
+    profile_save:   'Guardar',
+    profile_del:    'Borrar',
+    profile_pick:   '— perfil —',
+    profile_saved:  'Perfil «{n}» guardado.\n',
+    profile_applied:'Perfil «{n}» aplicado.\n',
     lbl_parallel:   'Paralelo',
     par_auto:       'Auto',
     cpu_hint:       '{cores} núcleos · auto = {auto}',
@@ -174,6 +183,15 @@ const I18N = {
     lbl_format:     'Format',
     lbl_audio:      'Audio',
     audio_original: 'Original',
+    lbl_resolution: 'Resolution',
+    res_original:   'Original',
+    lbl_profile:    'Profile',
+    profile_ph:     'Profile name…',
+    profile_save:   'Save',
+    profile_del:    'Delete',
+    profile_pick:   '— profile —',
+    profile_saved:  'Profile "{n}" saved.\n',
+    profile_applied:'Profile "{n}" applied.\n',
     lbl_parallel:   'Parallel',
     par_auto:       'Auto',
     cpu_hint:       '{cores} cores · auto = {auto}',
@@ -281,6 +299,9 @@ function applyI18n() {
   });
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
     el.title = t(el.dataset.i18nTitle);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPh);
   });
   document.documentElement.lang = LANG;
   // Marcar el botón de idioma activo

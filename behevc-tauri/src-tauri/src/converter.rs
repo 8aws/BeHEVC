@@ -35,13 +35,17 @@ pub struct ConversionSettings {
     pub crf: u8,
     /// Preset de velocidad/compresión ("slow" | "medium" | "fast").
     pub preset: String,
-    /// Tratamiento del audio: "copy" (sin recodificar) o "aac" (recodificar a AAC).
+    /// Tratamiento del audio: "copy" | "aac" | "opus".
     #[serde(default = "default_audio")]
     pub audio: String,
+    /// Reescalado: "none" o la ALTURA destino ("1080", "720", "480"). Mantiene aspecto.
+    #[serde(default = "default_scale")]
+    pub scale: String,
 }
 
 fn default_encoder() -> String { "libx265".to_string() }
 fn default_audio() -> String { "copy".to_string() }
+fn default_scale() -> String { "none".to_string() }
 
 impl ConversionSettings {
     /// true si el encoder seleccionado es de hardware (no libx265).
@@ -57,6 +61,7 @@ impl Default for ConversionSettings {
             crf: 28,
             preset: "medium".to_string(),
             audio: default_audio(),
+            scale: default_scale(),
         }
     }
 }
@@ -566,18 +571,33 @@ fn build_ffmpeg_args(
         }
     }
 
+    // Cadena de filtros de vídeo unificada (escala + VAAPI), un solo -vf.
+    let mut filters: Vec<String> = Vec::new();
+    if settings.scale != "none" {
+        if let Ok(h) = settings.scale.parse::<u32>() {
+            // -2 mantiene el aspecto con ancho par; solo reduce (no agranda)
+            filters.push(format!("scale=-2:'min({},ih)':flags=lanczos", h));
+        }
+    }
+    if settings.encoder == "hevc_vaapi" {
+        filters.push("format=nv12".into());
+        filters.push("hwupload".into());
+    }
+    if !filters.is_empty() {
+        args.extend(["-vf".into(), filters.join(",")]);
+    }
+
     // Codec de vídeo — args específicos según el encoder seleccionado.
     append_video_codec_args(&mut args, settings);
 
     // Preservar metadatos de color/HDR del original (primaries/transfer/colorspace)
     args.extend(color_args.iter().cloned());
 
-    // Audio: copiar tal cual o recodificar a AAC (máxima compatibilidad).
-    if settings.audio == "aac" {
-        args.extend(["-c:a".into(), "aac".into()]);
-        args.extend(["-b:a".into(), "192k".into()]);
-    } else {
-        args.extend(["-c:a".into(), "copy".into()]);
+    // Audio: copiar, o recodificar a AAC / Opus.
+    match settings.audio.as_str() {
+        "aac"  => args.extend(["-c:a".into(), "aac".into(),       "-b:a".into(), "192k".into()]),
+        "opus" => args.extend(["-c:a".into(), "libopus".into(),   "-b:a".into(), "128k".into()]),
+        _      => args.extend(["-c:a".into(), "copy".into()]),
     }
 
     if matches!(mode, MappingMode::Full) {
@@ -630,9 +650,8 @@ pub(crate) fn append_video_codec_args(args: &mut Vec<String>, s: &ConversionSett
             args.extend(["-qp_i".into(), crf.clone()]);
             args.extend(["-qp_p".into(), crf]);
         }
-        // ── Linux VAAPI (el device se inicializó antes del -i) ──────────────
+        // ── Linux VAAPI (device antes del -i; el filtro format/hwupload va en -vf) ──
         "hevc_vaapi" => {
-            args.extend(["-vf".into(), "format=nv12,hwupload".into()]);
             args.extend(["-c:v".into(), "hevc_vaapi".into()]);
             args.extend(["-qp".into(), crf]);
         }
@@ -709,6 +728,7 @@ mod tests {
             crf: 28,
             preset: "medium".to_string(),
             audio: audio.to_string(),
+            scale: "none".to_string(),
         }
     }
 
@@ -788,6 +808,34 @@ mod tests {
         let args = build_ffmpeg_args("in.mkv", "out.mkv", &s, &MappingMode::PrimaryOnly, &[]);
         assert!(!contains(&args, "-c:s"));
         assert!(!contains(&args, "0:s?"));
+    }
+
+    #[test]
+    fn audio_opus() {
+        let s = settings("libx265", "opus");
+        let a = build_ffmpeg_args("in.mkv", "out.mkv", &s, &MappingMode::Full, &[]);
+        assert_eq!(value_after(&a, "-c:a").as_deref(), Some("libopus"));
+        assert_eq!(value_after(&a, "-b:a").as_deref(), Some("128k"));
+    }
+
+    #[test]
+    fn scale_adds_single_vf() {
+        let mut s = settings("libx265", "copy");
+        s.scale = "1080".to_string();
+        let a = build_ffmpeg_args("in.mkv", "out.mkv", &s, &MappingMode::Full, &[]);
+        let vf = value_after(&a, "-vf").unwrap();
+        assert!(vf.contains("scale=-2:'min(1080,ih)'"), "vf: {}", vf);
+        assert_eq!(a.iter().filter(|x| *x == "-vf").count(), 1, "un único -vf");
+    }
+
+    #[test]
+    fn vaapi_scale_merge_one_vf() {
+        let mut s = settings("hevc_vaapi", "copy");
+        s.scale = "720".to_string();
+        let a = build_ffmpeg_args("in.mkv", "out.mkv", &s, &MappingMode::Full, &[]);
+        let vf = value_after(&a, "-vf").unwrap();
+        assert!(vf.contains("scale=") && vf.contains("format=nv12") && vf.contains("hwupload"), "vf: {}", vf);
+        assert_eq!(a.iter().filter(|x| *x == "-vf").count(), 1, "un único -vf");
     }
 
     #[test]

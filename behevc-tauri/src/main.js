@@ -31,6 +31,7 @@ const state = {
   encoder:            'libx265',
   container:          'mkv',
   audio:              'copy',
+  scale:              'none',   // 'none' | altura destino ('1080','720','480')
   concurrency:        'auto',   // 'auto' | número de conversiones simultáneas
   lang:               'es',     // idioma de la UI: 'es' | 'en'
   optimizeHevc:       false,    // recomprimir HEVC existentes (3.0)
@@ -522,7 +523,7 @@ async function launchConversion() {
   try {
     await invoke('start_conversion', {
       jobs,
-      settings: { encoder: state.encoder, crf: q.crf, preset: q.preset, audio: state.audio },
+      settings: { encoder: state.encoder, crf: q.crf, preset: q.preset, audio: state.audio, scale: state.scale },
       ffmpegPath:   state.ffmpegPath,
       ffprobePath:  state.ffprobePath,
       backupFolder: state.backupFolder,
@@ -1053,6 +1054,15 @@ $('concurrency-group').addEventListener('click', e => {
   saveSettings();
 });
 
+$('scale-group').addEventListener('click', e => {
+  const btn = e.target.closest('.opt-btn');
+  if (!btn || state.isProcessing) return;
+  $('scale-group').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.scale = btn.dataset.scale;
+  saveSettings();
+});
+
 // ── Modo "Optimizar HEVC existentes" (3.0) ──────────────────────────────────
 
 $('opt-hevc').addEventListener('change', e => {
@@ -1103,7 +1113,7 @@ btnEstimate.addEventListener('click', async () => {
   try {
     await invoke('estimate_savings', {
       paths,
-      settings:    { encoder: state.encoder, crf: q.crf, preset: q.preset, audio: state.audio },
+      settings:    { encoder: state.encoder, crf: q.crf, preset: q.preset, audio: state.audio, scale: state.scale },
       ffmpegPath:  state.ffmpegPath,
       ffprobePath: state.ffprobePath,
       concurrency: state.concurrency === 'auto' ? null : parseInt(state.concurrency),
@@ -1189,19 +1199,57 @@ listen('tauri://drag-drop', async ({ payload }) => {
 
 const SETTINGS_KEY = 'behevc_settings';
 
+// Conjunto de ajustes que forman un "perfil" (sin carpetas/idioma).
+function currentProfile() {
+  return {
+    crf: state.quality.crf, preset: state.quality.preset,
+    encoder: state.encoder, container: state.container, audio: state.audio,
+    scale: state.scale, concurrency: state.concurrency,
+    optimizeHevc: state.optimizeHevc,
+    estMinVmaf: state.estMinVmaf, estMinSavings: state.estMinSavings,
+  };
+}
+
+// Aplica un objeto de ajustes al estado (no toca carpetas/idioma).
+function applyProfileObject(p) {
+  if (p.crf && p.preset) state.quality = { crf: p.crf, preset: p.preset };
+  if (p.encoder)   state.encoder = p.encoder;
+  if (p.container) state.container = p.container;
+  if (p.audio)     state.audio = p.audio;
+  if (p.scale)     state.scale = p.scale;
+  if (p.concurrency) state.concurrency = p.concurrency;
+  state.optimizeHevc = !!p.optimizeHevc;
+  if (typeof p.estMinVmaf === 'number')    state.estMinVmaf = p.estMinVmaf;
+  if (typeof p.estMinSavings === 'number') state.estMinSavings = p.estMinSavings;
+}
+
+// Sincroniza TODOS los controles de la UI con el estado actual.
+function syncControlsFromState() {
+  document.querySelectorAll('.quality-btn').forEach(b =>
+    b.classList.toggle('active', +b.dataset.crf === state.quality.crf && b.dataset.preset === state.quality.preset));
+  const grp = (id, attr, val) => $(id).querySelectorAll('button').forEach(b =>
+    b.classList.toggle('active', b.dataset[attr] === String(val)));
+  grp('container-group', 'container', state.container);
+  grp('audio-group', 'audio', state.audio);
+  grp('scale-group', 'scale', state.scale);
+  grp('concurrency-group', 'concurrency', state.concurrency);
+  encoderGroup.querySelectorAll('.encoder-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.encoder === state.encoder));
+  // Si el encoder (p. ej. HW) no está disponible aún, caer a software
+  if (!encoderGroup.querySelector('.encoder-btn.active')) {
+    state.encoder = 'libx265';
+    encoderGroup.querySelector('[data-encoder="libx265"]')?.classList.add('active');
+  }
+  $('opt-hevc').checked = state.optimizeHevc;
+  $('th-vmaf').value    = state.estMinVmaf;
+  $('th-savings').value = state.estMinSavings;
+}
+
 function saveSettings() {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({
-      crf:          state.quality.crf,
-      preset:       state.quality.preset,
-      encoder:      state.encoder,
-      container:    state.container,
-      audio:        state.audio,
-      concurrency:  state.concurrency,
-      lang:         LANG,
-      optimizeHevc: state.optimizeHevc,
-      estMinVmaf:   state.estMinVmaf,
-      estMinSavings: state.estMinSavings,
+      ...currentProfile(),
+      lang: LANG,
       outputFolder: state.outputFolder,
       backupFolder: state.backupFolder,
     }));
@@ -1218,39 +1266,9 @@ function loadSettings() {
   setLang(s.lang || sysLang);
   state.lang = LANG;
 
-  // Calidad
-  if (s.crf && s.preset) {
-    state.quality = { crf: s.crf, preset: s.preset };
-    document.querySelectorAll('.quality-btn').forEach(b => {
-      b.classList.toggle('active', +b.dataset.crf === s.crf && b.dataset.preset === s.preset);
-    });
-  }
-  // Formato y audio
-  if (s.container) {
-    state.container = s.container;
-    $('container-group').querySelectorAll('.opt-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.container === s.container));
-  }
-  if (s.audio) {
-    state.audio = s.audio;
-    $('audio-group').querySelectorAll('.opt-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.audio === s.audio));
-  }
-  if (s.concurrency) {
-    state.concurrency = s.concurrency;
-    $('concurrency-group').querySelectorAll('.opt-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.concurrency === String(s.concurrency)));
-  }
-  // Encoder por defecto (los de hardware se restauran tras detectarlos)
-  if (s.encoder) state.encoder = s.encoder;
-  // Modo optimizar HEVC (3.0)
-  state.optimizeHevc = !!s.optimizeHevc;
-  $('opt-hevc').checked = state.optimizeHevc;
-  // Umbrales de veredicto
-  if (typeof s.estMinVmaf === 'number')    state.estMinVmaf = s.estMinVmaf;
-  if (typeof s.estMinSavings === 'number') state.estMinSavings = s.estMinSavings;
-  $('th-vmaf').value    = state.estMinVmaf;
-  $('th-savings').value = state.estMinSavings;
+  applyProfileObject(s);
+  syncControlsFromState();
+
   // Carpetas
   if (s.outputFolder) {
     state.outputFolder = s.outputFolder;
@@ -1262,8 +1280,57 @@ function loadSettings() {
   }
 }
 
+// ── Perfiles guardados ──────────────────────────────────────────────────────
+
+const PROFILES_KEY = 'behevc_profiles';
+
+function readProfiles() {
+  try { return JSON.parse(localStorage.getItem(PROFILES_KEY) || '{}') || {}; } catch (_) { return {}; }
+}
+function writeProfiles(p) { try { localStorage.setItem(PROFILES_KEY, JSON.stringify(p)); } catch (_) {} }
+
+function refreshProfileSelect(selected) {
+  const sel = $('profile-select');
+  const names = Object.keys(readProfiles()).sort();
+  sel.innerHTML = `<option value="">${t('profile_pick')}</option>` +
+    names.map(n => `<option value="${n}">${n}</option>`).join('');
+  sel.value = selected && names.includes(selected) ? selected : '';
+  $('profile-del').hidden = !sel.value;
+}
+
+$('profile-select').addEventListener('change', e => {
+  const name = e.target.value;
+  $('profile-del').hidden = !name;
+  if (!name || state.isProcessing) return;
+  const p = readProfiles()[name];
+  if (!p) return;
+  applyProfileObject(p);
+  syncControlsFromState();
+  applyHevcSelection();
+  if (state.files.length) recalcOutputPaths();
+  renderFileList(); updateStats(); updateButtonStates(); saveSettings();
+  appendLog(t('profile_applied', { n: name }));
+});
+
+$('profile-save').addEventListener('click', () => {
+  const name = ($('profile-name').value || $('profile-select').value).trim();
+  if (!name) { $('profile-name').focus(); return; }
+  const p = readProfiles(); p[name] = currentProfile(); writeProfiles(p);
+  $('profile-name').value = '';
+  refreshProfileSelect(name);
+  appendLog(t('profile_saved', { n: name }));
+});
+
+$('profile-del').addEventListener('click', () => {
+  const name = $('profile-select').value;
+  if (!name) return;
+  const p = readProfiles(); delete p[name]; writeProfiles(p);
+  refreshProfileSelect('');
+});
+
 // ── Arranque ──────────────────────────────────────────────────────────────
 
 loadSettings();
+refreshProfileSelect('');
 applyI18n();   // traduce la UI estática según el idioma activo
 init();

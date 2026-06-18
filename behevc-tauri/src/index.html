@@ -92,6 +92,15 @@
       </div>
     </section>
 
+    <!-- ── Perfiles guardados ─────────────────────────────────────────── -->
+    <div class="quality-row">
+      <span class="quality-label" data-i18n="lbl_profile">Perfil</span>
+      <select id="profile-select" class="profile-select"></select>
+      <input id="profile-name" class="profile-name" maxlength="32" data-i18n-ph="profile_ph" placeholder="Nombre del perfil…">
+      <button id="profile-save" class="btn-outline" data-i18n="profile_save">Guardar</button>
+      <button id="profile-del"  class="btn-outline" data-i18n="profile_del" hidden>Borrar</button>
+    </div>
+
     <!-- ── Calidad + Codificador ──────────────────────────────────────── -->
     <div class="quality-row">
       <span class="quality-label" data-i18n="lbl_quality">Calidad</span>
@@ -118,6 +127,14 @@
       <div class="quality-group" id="audio-group">
         <button class="opt-btn active" data-audio="copy" data-i18n="audio_original">Original</button>
         <button class="opt-btn" data-audio="aac">AAC</button>
+        <button class="opt-btn" data-audio="opus">Opus</button>
+      </div>
+      <span class="quality-label sep-label" data-i18n="lbl_resolution">Resolución</span>
+      <div class="quality-group" id="scale-group">
+        <button class="opt-btn active" data-scale="none" data-i18n="res_original">Original</button>
+        <button class="opt-btn" data-scale="1080">1080p</button>
+        <button class="opt-btn" data-scale="720">720p</button>
+        <button class="opt-btn" data-scale="480">480p</button>
       </div>
       <span class="quality-label sep-label" data-i18n="lbl_parallel">Paralelo</span>
       <div class="quality-group" id="concurrency-group">
