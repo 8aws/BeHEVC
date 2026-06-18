@@ -118,23 +118,30 @@ fn estimate_one(
     let mut sampled_secs = 0.0f64;
     let mut vmaf_scores: Vec<f64> = Vec::new();
 
+    // Igual que la conversión real: si el encoder de hardware falla, se cae a software.
+    // Estimamos con el encoder que de verdad acabaría usándose.
+    let mut fallback = settings.clone();
+    fallback.encoder = "libx265".to_string();
+
     for (i, pos) in SAMPLE_POSITIONS.iter().enumerate() {
         let start = duration * pos;
         let dur = SAMPLE_SECONDS.min((duration - start).max(0.0));
         if dur < 0.5 { continue; }
 
         let tmp = tmp_dir.join(format!("behevc_sample_{}_{}.mkv", index, i));
-        let args = build_sample_args(path, start, dur, settings, &tmp.to_string_lossy());
+        let tmp_str = tmp.to_string_lossy().to_string();
 
-        let ran = Command::new(ffmpeg_path).args(&args).output();
-        let mut sample_ok = false;
-        if let Ok(out) = ran {
-            if out.status.success() {
-                if let Ok(m) = std::fs::metadata(&tmp) {
-                    sample_bytes += m.len();
-                    sampled_secs += dur;
-                    sample_ok = true;
-                }
+        // Intento 1: encoder configurado. Si falla y era hardware, intento 2: software.
+        let mut sample_ok = encode_sample(ffmpeg_path, path, start, dur, settings, &tmp_str);
+        if !sample_ok && settings.is_hardware() {
+            sample_ok = encode_sample(ffmpeg_path, path, start, dur, &fallback, &tmp_str);
+        }
+        if sample_ok {
+            if let Ok(m) = std::fs::metadata(&tmp) {
+                sample_bytes += m.len();
+                sampled_secs += dur;
+            } else {
+                sample_ok = false;
             }
         }
 
@@ -204,6 +211,16 @@ fn parse_vmaf(stderr: &str) -> Option<f64> {
         }
     }
     None
+}
+
+/// Codifica un trozo de muestra; devuelve true si ffmpeg terminó con éxito.
+fn encode_sample(ffmpeg_path: &str, input: &str, start: f64, dur: f64,
+                 settings: &ConversionSettings, output: &str) -> bool {
+    let args = build_sample_args(input, start, dur, settings, output);
+    match Command::new(ffmpeg_path).args(&args).output() {
+        Ok(out) => out.status.success(),
+        Err(_)  => false,
+    }
 }
 
 /// Argumentos de ffmpeg para codificar UN trozo de muestra con los ajustes objetivo.
