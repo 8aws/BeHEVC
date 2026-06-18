@@ -1,4 +1,4 @@
-// i18n.js — internacionalización ES/EN de la UI de BeHEVC
+// i18n.js — internacionalización ES/EN de la UI de B265
 //
 // Se carga antes que main.js y expone `t`, `setLang`, `applyI18n` y `LANG`
 // como globales. Las cadenas con marcadores usan {nombre} y se sustituyen en t().
@@ -125,11 +125,11 @@ const I18N = {
     sum_errors:       '❌ Con errores ({n}) → intactos en ubicación original',
     sum_complete:     '✅ Proceso completo',
     // Actualizaciones
-    upd_app:          '\n💡 Nueva versión de BeHEVC disponible: {latest} (instalada: {current})\n',
+    upd_app:          '\n💡 Nueva versión de B265 disponible: {latest} (instalada: {current})\n',
     upd_app_dl:       '   Descárgala en https://b265.uverse.es\n',
     upd_ffmpeg:       '\n💡 Nueva versión de ffmpeg recomendada: {latest} (instalada: {current})\n',
     // Notificación
-    notif_title:      'BeHEVC — conversión completada',
+    notif_title:      'B265 — conversión completada',
     notif_body:       '{n} archivo(s) convertido(s)',
     notif_savings:    ' · ahorro −{pct}%',
   },
@@ -243,10 +243,10 @@ const I18N = {
     sum_skipped:      '⏭  Already HEVC ({n}) → left in their original location',
     sum_errors:       '❌ With errors ({n}) → left in their original location',
     sum_complete:     '✅ Process complete',
-    upd_app:          '\n💡 New BeHEVC version available: {latest} (installed: {current})\n',
+    upd_app:          '\n💡 New B265 version available: {latest} (installed: {current})\n',
     upd_app_dl:       '   Download it at https://b265.uverse.es\n',
     upd_ffmpeg:       '\n💡 New recommended ffmpeg version: {latest} (installed: {current})\n',
-    notif_title:      'BeHEVC — conversion complete',
+    notif_title:      'B265 — conversion complete',
     notif_body:       '{n} file(s) converted',
     notif_savings:    ' · savings −{pct}%',
   },

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "BeHEVC",
+  "productName": "B265",
   "version": "3.0.0",
   "identifier": "com.behevc.app",
   "build": {
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "BeHEVC",
+        "title": "B265",
         "width": 940,
         "height": 720,
         "minWidth": 820,

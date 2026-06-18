@@ -1,4 +1,4 @@
-// main.js — Frontend de BeHEVC
+// main.js — Frontend de B265
 
 const { invoke } = window.__TAURI__.core;
 const { listen  } = window.__TAURI__.event;
@@ -883,8 +883,8 @@ async function checkForUpdates(installedFfmpegVersion) {
       appendLog(t('upd_app_dl'));
       btnCheckUpdate.removeAttribute('data-i18n');      // texto dinámico, no traducir
       btnCheckUpdate.removeAttribute('data-i18n-title');
-      btnCheckUpdate.title = `BeHEVC ${latestApp}`;
-      btnCheckUpdate.textContent = `↑ BeHEVC ${latestApp}`;
+      btnCheckUpdate.title = `B265 ${latestApp}`;
+      btnCheckUpdate.textContent = `↑ B265 ${latestApp}`;
       btnCheckUpdate.hidden = false;
       btnCheckUpdate.dataset.updateUrl = 'https://b265.uverse.es/#downloads';
     }

@@ -8,26 +8,27 @@ Estado: ☐ pendiente · ◐ en curso · ☑ hecho.
 > ## Pendientes para subversiones (3.0.x / 3.1) — anotado 2026-06-18
 >
 > **Bugs**
-> - ☐ **Cola larga colapsa**: en una conversión de **>400 archivos**, tras ~280 la cola
->   "colapsó" y dejó de actualizar las líneas de *Convirtiendo*. Investigar: posible
->   saturación de eventos `conversion-progress`/DOM con listas enormes, o problema en el
->   pool/cola al acumular. Prioridad alta para 3.0.1. (Repro: lote de 400+.)
+> - ◐ **Cola larga colapsa** (>400 archivos, paraba a ~280): mitigado en frontend (cap del
+>   log, throttle de barras ~100ms, sin reescrituras de fila redundantes). **Falta repro real**
+>   de 400+ para confirmar; si persiste, sería backend (pool/cola).
 >
 > **UX / gestión de cola**
-> - ☐ **Vaciar/purgar la cola** con un botón disponible **en cualquier momento** (no solo en
->   el banner de fin). Hoy, para cambiar a otro lote hay que cerrar y reabrir la app; añadir
->   elementos los suma a los existentes (bien para lotes, pero falta "limpiar lista y elegir nuevos").
+> - ☑ **Vaciar/purgar la cola** con botón "Vaciar lista" disponible en cualquier momento.
 >
 > **Rebranding**
-> - ☐ **Renombrar la app a `B265`** (se lee "Be265" en inglés) — es el nombre del icono y
->   desliga del nombre del codec para evitar confusión. Alcance: `productName`, título de
->   ventana, web (título/branding/meta), `version.json`/changelog, textos i18n.
->   **Decisión pendiente:** ¿mantener el `identifier` `com.behevc.app` (recomendado, preserva
->   continuidad de updates/firma para usuarios existentes) o cambiarlo? Cambiarlo rompería el
->   reconocimiento de la app instalada.
+> - ☑ **Renombrado a `B265`**: `productName`, título de ventana, UI (h1/title), web
+>   (título/branding/meta/features), i18n (notif/updates). **`identifier` se mantiene en
+>   `com.behevc.app`** (preserva updates/firma y los ajustes guardados del usuario).
+>   El repo, el crate (`behevc`) y las URLs de GitHub siguen igual.
+>   > ⚠️ **Efecto en el próximo release:** los artefactos pasarán a llamarse `B265_X.Y.Z_*`
+>   > (tauri usa productName). Hay que actualizar las URLs de `website/version.json` a ese
+>   > patrón AL publicar, y subir los instaladores `B265_*` al servidor.
+>   > La web renombrada **no se ha desplegado aún** (la 3.0.0 live sigue siendo BeHEVC):
+>   > se desplegará con el próximo release para no desencajar nombres.
 >
 > **Web**
-> - ☐ Sustituir el **emoji 🪟 de Windows** por un logotipo decente en la página de descargas.
+> - ☑ Logo de Windows: emoji 🪟 sustituido por SVG de 4 paneles (tarjeta principal + alt).
+>   *(Pendiente de desplegar con el próximo release.)*
 
 > **Principio de diseño:** recomprimir HEVC→HEVC tiene pérdida generacional. La app no
 > debe "recomprimir por recomprimir": debe **estimar ahorro y calidad** y recomendar solo
