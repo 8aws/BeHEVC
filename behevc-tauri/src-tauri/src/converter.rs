@@ -41,11 +41,19 @@ pub struct ConversionSettings {
     /// Reescalado: "none" o la ALTURA destino ("1080", "720", "480"). Mantiene aspecto.
     #[serde(default = "default_scale")]
     pub scale: String,
+    /// Pistas de audio a conservar: "all" (todas) o "first" (solo la primera).
+    #[serde(default = "default_tracks")]
+    pub audio_tracks: String,
+    /// Subtítulos: "keep" (conservar) o "none" (descartar).
+    #[serde(default = "default_subs")]
+    pub subs: String,
 }
 
 fn default_encoder() -> String { "libx265".to_string() }
 fn default_audio() -> String { "copy".to_string() }
 fn default_scale() -> String { "none".to_string() }
+fn default_tracks() -> String { "all".to_string() }
+fn default_subs() -> String { "keep".to_string() }
 
 impl ConversionSettings {
     /// true si el encoder seleccionado es de hardware (no libx265).
@@ -62,6 +70,8 @@ impl Default for ConversionSettings {
             preset: "medium".to_string(),
             audio: default_audio(),
             scale: default_scale(),
+            audio_tracks: default_tracks(),
+            subs: default_subs(),
         }
     }
 }
@@ -548,24 +558,27 @@ fn build_ffmpeg_args(
     args.extend(["-progress".into(), "pipe:1".into()]);
     args.extend(["-nostats".into()]);
 
+    // Mapa de audio según la política de pistas: todas o solo la primera.
+    let audio_map = if settings.audio_tracks == "first" { "0:a:0?" } else { "0:a?" };
+
     match mode {
         MappingMode::Full => {
             // Mapeo selectivo: solo el PRIMER stream de vídeo (evita cover art/thumbnail
-            // embebidos en MOV/MP4 que fallan al intentar recodificarlos como HEVC),
-            // más todos los streams de audio, subtítulos y datos.
-            args.extend(["-map".into(), "0:v:0".into()]);   // primer vídeo
-            args.extend(["-map".into(), "0:a?".into()]);    // todos los audios (opcional)
-            args.extend(["-map".into(), "0:s?".into()]);    // todos los subtítulos (opcional)
-            args.extend(["-map".into(), "0:d?".into()]);    // datos/adjuntos (opcional)
+            // embebidos en MOV/MP4 que fallan al intentar recodificarlos como HEVC).
+            args.extend(["-map".into(), "0:v:0".into()]);     // primer vídeo
+            args.extend(["-map".into(), audio_map.into()]);   // audio (todas o primera)
+            if settings.subs == "keep" {
+                args.extend(["-map".into(), "0:s?".into()]);  // subtítulos (opcional)
+                args.extend(["-map".into(), "0:d?".into()]);  // datos/adjuntos (opcional)
+            }
             args.extend(["-map_metadata".into(), "0".into()]);  // metadatos (título, fecha…)
             args.extend(["-map_chapters".into(), "0".into()]);  // capítulos
             args.extend(["-ignore_unknown".into()]);
         }
         MappingMode::PrimaryOnly => {
-            // Fallback mínimo: solo vídeo principal + audio. Sin subtítulos ni datos
-            // para evitar conflictos de contenedor o streams incompatibles.
+            // Fallback mínimo: solo vídeo principal + audio. Sin subtítulos ni datos.
             args.extend(["-map".into(), "0:v:0".into()]);
-            args.extend(["-map".into(), "0:a?".into()]);
+            args.extend(["-map".into(), audio_map.into()]);
             args.extend(["-map_metadata".into(), "0".into()]);
             args.extend(["-map_chapters".into(), "0".into()]);
         }
@@ -600,7 +613,7 @@ fn build_ffmpeg_args(
         _      => args.extend(["-c:a".into(), "copy".into()]),
     }
 
-    if matches!(mode, MappingMode::Full) {
+    if matches!(mode, MappingMode::Full) && settings.subs == "keep" {
         // Subtítulos: MP4 solo admite mov_text; MKV copia cualquier formato.
         if output.to_lowercase().ends_with(".mp4") {
             args.extend(["-c:s".into(), "mov_text".into()]);
@@ -729,6 +742,8 @@ mod tests {
             preset: "medium".to_string(),
             audio: audio.to_string(),
             scale: "none".to_string(),
+            audio_tracks: "all".to_string(),
+            subs: "keep".to_string(),
         }
     }
 
@@ -836,6 +851,22 @@ mod tests {
         let vf = value_after(&a, "-vf").unwrap();
         assert!(vf.contains("scale=") && vf.contains("format=nv12") && vf.contains("hwupload"), "vf: {}", vf);
         assert_eq!(a.iter().filter(|x| *x == "-vf").count(), 1, "un único -vf");
+    }
+
+    #[test]
+    fn track_selection() {
+        // Por defecto: todas las pistas de audio + subtítulos
+        let def = build_ffmpeg_args("in.mkv", "out.mkv", &settings("libx265", "copy"), &MappingMode::Full, &[]);
+        assert!(contains(&def, "0:a?") && contains(&def, "0:s?"));
+
+        // Solo primera pista de audio, sin subtítulos
+        let mut s = settings("libx265", "copy");
+        s.audio_tracks = "first".to_string();
+        s.subs = "none".to_string();
+        let a = build_ffmpeg_args("in.mkv", "out.mkv", &s, &MappingMode::Full, &[]);
+        assert!(contains(&a, "0:a:0?"), "primera pista de audio");
+        assert!(!contains(&a, "0:s?"), "sin mapeo de subtítulos");
+        assert!(!contains(&a, "-c:s"), "sin códec de subtítulos");
     }
 
     #[test]

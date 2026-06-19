@@ -239,7 +239,7 @@ jobs:
         with:
           draft: true
           tag_name: ${{ github.ref_name }}
-          name: BeHEVC ${{ github.ref_name }}
+          name: B265 ${{ github.ref_name }}
           fail_on_unmatched_files: false
           files: |
             behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg

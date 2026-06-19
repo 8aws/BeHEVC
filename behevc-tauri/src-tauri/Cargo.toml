@@ -1,6 +1,6 @@
 [package]
 name = "behevc"
-version = "3.0.0"
+version = "3.1.0"
 edition = "2021"
 
 # "cdylib" es necesario para que Tauri pueda cargar la librería en iOS/Android

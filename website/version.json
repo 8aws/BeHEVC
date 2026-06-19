@@ -1,17 +1,28 @@
 {
   "app": {
-    "version": "3.0.0",
-    "release_date": "2026-06-15",
-    "changelog": "BeHEVC 3.0: recompresión inteligente de HEVC existentes — chip de margen por bitrate, precálculo de ahorro por muestreo con VMAF y veredicto (recomendado/marginal/no merece la pena), y resguardo que descarta la recompresión si no encoge (nunca empeora un archivo)",
+    "version": "3.1.0",
+    "release_date": "2026-06-19",
+    "changelog": "B265 3.1: reescalado 1080/720/480, audio Opus, perfiles guardados, selección de pistas (audio/subtítulos), tema claro/oscuro, historial de ahorro, lista ordenable/filtrable, logs e interfaz en ES/EN, y arreglo de colas largas. Renombrada de BeHEVC a B265.",
     "downloads": {
-      "macos_arm64":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_aarch64.dmg",
-      "macos_intel":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_x64.dmg",
-      "windows_x64":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_x64-setup.exe",
-      "windows_arm64": "https://b265.uverse.es/downloads/BeHEVC_3.0.0_arm64-setup.exe",
-      "linux_x64":     "https://b265.uverse.es/downloads/BeHEVC_3.0.0_amd64.AppImage",
-      "linux_arm64":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_aarch64.AppImage"
+      "macos_arm64":   "https://b265.uverse.es/downloads/B265_3.1.0_aarch64.dmg",
+      "macos_intel":   "https://b265.uverse.es/downloads/B265_3.1.0_x64.dmg",
+      "windows_x64":   "https://b265.uverse.es/downloads/B265_3.1.0_x64-setup.exe",
+      "windows_arm64": "https://b265.uverse.es/downloads/B265_3.1.0_arm64-setup.exe",
+      "linux_x64":     "https://b265.uverse.es/downloads/B265_3.1.0_amd64.AppImage",
+      "linux_arm64":   "https://b265.uverse.es/downloads/B265_3.1.0_aarch64.AppImage"
     },
     "previous": [
+      {
+        "version": "3.0.0",
+        "downloads": {
+          "macos_arm64":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_aarch64.dmg",
+          "macos_intel":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_x64.dmg",
+          "windows_x64":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_x64-setup.exe",
+          "windows_arm64": "https://b265.uverse.es/downloads/BeHEVC_3.0.0_arm64-setup.exe",
+          "linux_x64":     "https://b265.uverse.es/downloads/BeHEVC_3.0.0_amd64.AppImage",
+          "linux_arm64":   "https://b265.uverse.es/downloads/BeHEVC_3.0.0_aarch64.AppImage"
+        }
+      },
       {
         "version": "2.0.0",
         "downloads": {

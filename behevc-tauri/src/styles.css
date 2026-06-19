@@ -26,6 +26,54 @@
   --radius-sm:    7px;
 }
 
+/* Tema claro: sobreescribe las variables; el resto de estilos no cambian */
+body.theme-light {
+  --bg:         #f4f4f7;
+  --bg2:        #ffffff;
+  --bg3:        #ececf1;
+  --bg4:        #e2e2ea;
+  --border:     rgba(0,0,0,0.10);
+  --border-mid: rgba(0,0,0,0.16);
+  --text:       #1a1a22;
+  --text-dim:   #7a7a8c;
+  --text-mid:   #55556a;
+  --green:      #1a9e52;
+  --red:        #d23b3b;
+}
+body.theme-light {
+  background:
+    radial-gradient(ellipse at 10% 0%,  rgba(130, 80, 255, 0.06) 0%, transparent 55%),
+    radial-gradient(ellipse at 90% 100%, rgba(255, 122,   0, 0.05) 0%, transparent 50%),
+    #f4f4f7;
+}
+body.theme-light::before { opacity: 0.4; }
+
+.theme-toggle {
+  font-size: 14px; line-height: 1; padding: 4px 8px; border-radius: 20px;
+  background: var(--bg2); border: 1px solid var(--border-mid);
+  cursor: pointer; font-family: inherit;
+}
+.theme-toggle:hover { border-color: var(--orange); }
+
+.total-saved {
+  font-size: 11px; font-weight: 600; color: var(--green);
+  background: var(--green-dim); border: 1px solid rgba(74,222,128,0.22);
+  border-radius: 20px; padding: 3px 10px; white-space: nowrap;
+}
+
+.file-filter {
+  font-family: inherit; font-size: 12px; flex-shrink: 0;
+  background: var(--bg2); color: var(--text);
+  border: 1px solid var(--border-mid); border-radius: var(--radius-sm);
+  padding: 6px 11px; margin-bottom: 6px; width: 240px; max-width: 100%;
+}
+.file-filter::placeholder { color: var(--text-dim); }
+
+th.col-sortable { cursor: pointer; user-select: none; }
+th.col-sortable:hover { color: var(--text); }
+th.col-sortable.sort-asc::after  { content: ' ▲'; font-size: 9px; color: var(--orange); }
+th.col-sortable.sort-desc::after { content: ' ▼'; font-size: 9px; color: var(--orange); }
+
 html, body {
   height: 100%;
   overflow: hidden;

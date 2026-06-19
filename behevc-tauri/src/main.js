@@ -32,7 +32,13 @@ const state = {
   container:          'mkv',
   audio:              'copy',
   scale:              'none',   // 'none' | altura destino ('1080','720','480')
+  audioTracks:        'all',    // 'all' | 'first'
+  subs:               'keep',   // 'keep' | 'none'
   concurrency:        'auto',   // 'auto' | número de conversiones simultáneas
+  theme:              'dark',   // 'dark' | 'light'
+  sortKey:            null,     // columna de orden de la lista
+  sortDir:            1,        // 1 asc, -1 desc
+  filter:             '',       // filtro por nombre
   lang:               'es',     // idioma de la UI: 'es' | 'en'
   optimizeHevc:       false,    // recomprimir HEVC existentes (3.0)
   estMinVmaf:         93,       // umbral VMAF para veredicto "Recomendado"
@@ -284,6 +290,10 @@ async function init() {
       progGlobal.style.width = '100%';
       markAllDone();
       showCompletionBanner();
+      // Historial: acumular el ahorro real de esta sesión
+      if (state.totalOriginal > state.totalOutput) {
+        addTotalSaved(state.totalOriginal - state.totalOutput);
+      }
       // Notificación nativa con el resumen
       const done = state.files.filter(f => f.status === 'done').length;
       let body = t('notif_body', { n: done });
@@ -523,7 +533,7 @@ async function launchConversion() {
   try {
     await invoke('start_conversion', {
       jobs,
-      settings: { encoder: state.encoder, crf: q.crf, preset: q.preset, audio: state.audio, scale: state.scale },
+      settings: { encoder: state.encoder, crf: q.crf, preset: q.preset, audio: state.audio, scale: state.scale, audioTracks: state.audioTracks, subs: state.subs },
       ffmpegPath:   state.ffmpegPath,
       ffprobePath:  state.ffprobePath,
       backupFolder: state.backupFolder,
@@ -705,13 +715,31 @@ function renderFileList() {
   if (!state.files.length) {
     emptyState.hidden = false;
     fileTable.hidden  = true;
+    $('file-filter').hidden = true;
     return;
   }
   emptyState.hidden = true;
   fileTable.hidden  = false;
   fileListBody.innerHTML = '';
+  $('file-filter').hidden = false;
 
-  state.files.forEach((f, index) => {
+  // Vista ordenada/filtrada; se conserva el índice ORIGINAL en data-file-index
+  // para que jobIndexMap y setFileRowStatus sigan funcionando durante la conversión.
+  let view = state.files.map((f, index) => ({ f, index }));
+  const q = state.filter.trim().toLowerCase();
+  if (q) view = view.filter(v => v.f.name.toLowerCase().includes(q));
+  if (state.sortKey) {
+    const dir = state.sortDir;
+    view.sort((a, b) => sortVal(a.f) > sortVal(b.f) ? dir : sortVal(a.f) < sortVal(b.f) ? -dir : 0);
+    function sortVal(f) {
+      if (state.sortKey === 'name')  return f.name.toLowerCase();
+      if (state.sortKey === 'codec') return f.codec || '';
+      // savings: ahorro estimado si existe, si no por tamaño
+      return f.estSavings != null ? f.estSavings : (f.size || 0);
+    }
+  }
+
+  view.forEach(({ f, index }) => {
     const tr = document.createElement('tr');
     tr.dataset.path      = f.path;
     tr.dataset.fileIndex = index;
@@ -1063,6 +1091,63 @@ $('scale-group').addEventListener('click', e => {
   saveSettings();
 });
 
+$('tracks-audio-group').addEventListener('click', e => {
+  const btn = e.target.closest('.opt-btn');
+  if (!btn || state.isProcessing) return;
+  $('tracks-audio-group').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.audioTracks = btn.dataset.tracks;
+  saveSettings();
+});
+
+$('subs-group').addEventListener('click', e => {
+  const btn = e.target.closest('.opt-btn');
+  if (!btn || state.isProcessing) return;
+  $('subs-group').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.subs = btn.dataset.subs;
+  saveSettings();
+});
+
+// ── Lista: filtro y orden ───────────────────────────────────────────────────
+
+$('file-filter').addEventListener('input', e => {
+  state.filter = e.target.value;
+  renderFileList();
+});
+
+fileTable.querySelector('thead').addEventListener('click', e => {
+  const th = e.target.closest('.col-sortable');
+  if (!th) return;
+  const key = th.dataset.sort;
+  if (state.sortKey === key) state.sortDir *= -1;
+  else { state.sortKey = key; state.sortDir = 1; }
+  // Indicador visual de orden
+  fileTable.querySelectorAll('.col-sortable').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+  th.classList.add(state.sortDir > 0 ? 'sort-asc' : 'sort-desc');
+  renderFileList();
+});
+
+// ── Historial acumulado de ahorro ───────────────────────────────────────────
+
+const TOTAL_SAVED_KEY = 'behevc_total_saved';
+
+function getTotalSaved() {
+  return parseInt(localStorage.getItem(TOTAL_SAVED_KEY) || '0', 10) || 0;
+}
+function showTotalSaved() {
+  const total = getTotalSaved();
+  const el = $('total-saved');
+  if (total > 0) { el.textContent = t('total_saved', { size: formatBytes(total) }); el.hidden = false; }
+  else el.hidden = true;
+}
+function addTotalSaved(bytes) {
+  if (bytes > 0) {
+    localStorage.setItem(TOTAL_SAVED_KEY, String(getTotalSaved() + bytes));
+    showTotalSaved();
+  }
+}
+
 // ── Modo "Optimizar HEVC existentes" (3.0) ──────────────────────────────────
 
 $('opt-hevc').addEventListener('change', e => {
@@ -1143,6 +1228,19 @@ fileListBody.addEventListener('change', e => {
   updateButtonStates();
 });
 
+// ── Tema claro/oscuro ───────────────────────────────────────────────────────
+
+function applyTheme(theme) {
+  state.theme = theme === 'light' ? 'light' : 'dark';
+  document.body.classList.toggle('theme-light', state.theme === 'light');
+  $('theme-toggle').textContent = state.theme === 'light' ? '☀️' : '🌙';
+}
+
+$('theme-toggle').addEventListener('click', () => {
+  applyTheme(state.theme === 'light' ? 'dark' : 'light');
+  saveSettings();
+});
+
 // ── Selector de idioma ──────────────────────────────────────────────────────
 
 document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -1204,7 +1302,8 @@ function currentProfile() {
   return {
     crf: state.quality.crf, preset: state.quality.preset,
     encoder: state.encoder, container: state.container, audio: state.audio,
-    scale: state.scale, concurrency: state.concurrency,
+    scale: state.scale, audioTracks: state.audioTracks, subs: state.subs,
+    concurrency: state.concurrency,
     optimizeHevc: state.optimizeHevc,
     estMinVmaf: state.estMinVmaf, estMinSavings: state.estMinSavings,
   };
@@ -1217,6 +1316,8 @@ function applyProfileObject(p) {
   if (p.container) state.container = p.container;
   if (p.audio)     state.audio = p.audio;
   if (p.scale)     state.scale = p.scale;
+  if (p.audioTracks) state.audioTracks = p.audioTracks;
+  if (p.subs)      state.subs = p.subs;
   if (p.concurrency) state.concurrency = p.concurrency;
   state.optimizeHevc = !!p.optimizeHevc;
   if (typeof p.estMinVmaf === 'number')    state.estMinVmaf = p.estMinVmaf;
@@ -1232,6 +1333,8 @@ function syncControlsFromState() {
   grp('container-group', 'container', state.container);
   grp('audio-group', 'audio', state.audio);
   grp('scale-group', 'scale', state.scale);
+  grp('tracks-audio-group', 'tracks', state.audioTracks);
+  grp('subs-group', 'subs', state.subs);
   grp('concurrency-group', 'concurrency', state.concurrency);
   encoderGroup.querySelectorAll('.encoder-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.encoder === state.encoder));
@@ -1250,6 +1353,7 @@ function saveSettings() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({
       ...currentProfile(),
       lang: LANG,
+      theme: state.theme,
       outputFolder: state.outputFolder,
       backupFolder: state.backupFolder,
     }));
@@ -1268,6 +1372,10 @@ function loadSettings() {
 
   applyProfileObject(s);
   syncControlsFromState();
+
+  // Tema: el guardado, o el del sistema en el primer arranque
+  const sysDark = !window.matchMedia || !window.matchMedia('(prefers-color-scheme: light)').matches;
+  applyTheme(s.theme || (sysDark ? 'dark' : 'light'));
 
   // Carpetas
   if (s.outputFolder) {
@@ -1332,5 +1440,6 @@ $('profile-del').addEventListener('click', () => {
 
 loadSettings();
 refreshProfileSelect('');
+showTotalSaved();
 applyI18n();   // traduce la UI estática según el idioma activo
 init();

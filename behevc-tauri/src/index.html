@@ -16,10 +16,12 @@
         <p data-i18n="tagline">Compresión inteligente. Calidad profesional.</p>
       </div>
       <div class="header-badges">
+        <button id="theme-toggle" class="theme-toggle" data-i18n-title="theme_toggle" title="Tema claro/oscuro">🌙</button>
         <div class="lang-toggle">
           <button class="lang-btn" data-lang="es">ES</button>
           <button class="lang-btn" data-lang="en">EN</button>
         </div>
+        <span id="total-saved" class="total-saved" hidden></span>
         <span id="ffmpeg-status" data-i18n="loading">cargando…</span>
         <span id="ffmpeg-version" hidden></span>
         <button id="btn-check-update" class="btn-update" hidden data-i18n="update_ffmpeg" data-i18n-title="update_ffmpeg_title" title="Abrir página de descarga de ffmpeg">↑ Actualizar ffmpeg</button>
@@ -59,6 +61,9 @@
       <span class="stat-item green"><span data-i18n="stat_done">Hechos:</span> <strong id="stat-done">0</strong></span>
     </div>
 
+    <!-- ── Filtro ─────────────────────────────────────────────────────── -->
+    <input id="file-filter" class="file-filter" hidden data-i18n-ph="filter_ph" placeholder="Filtrar por nombre…">
+
     <!-- ── Lista de archivos ─────────────────────────────────────────── -->
     <div class="file-list-wrapper" id="file-list-wrapper">
       <div class="empty-state" id="empty-state">
@@ -69,10 +74,10 @@
         <thead>
           <tr>
             <th class="col-sel"></th>
-            <th class="col-name" data-i18n="col_name">Archivo</th>
-            <th class="col-codec" data-i18n="col_codec">Codec</th>
+            <th class="col-name col-sortable" data-sort="name" data-i18n="col_name">Archivo</th>
+            <th class="col-codec col-sortable" data-sort="codec" data-i18n="col_codec">Codec</th>
             <th class="col-status" data-i18n="col_status">Estado</th>
-            <th class="col-savings" data-i18n="col_savings">Ahorro</th>
+            <th class="col-savings col-sortable" data-sort="savings" data-i18n="col_savings">Ahorro</th>
           </tr>
         </thead>
         <tbody id="file-list-body"></tbody>
@@ -144,6 +149,21 @@
         <button class="opt-btn" data-concurrency="4">4</button>
       </div>
       <span class="cpu-hint" id="cpu-hint"></span>
+    </div>
+
+    <!-- ── Pistas (audio / subtítulos) ────────────────────────────────── -->
+    <div class="quality-row">
+      <span class="quality-label" data-i18n="lbl_tracks">Pistas</span>
+      <span class="quality-label sep-label" style="margin-left:0" data-i18n="lbl_audio">Audio</span>
+      <div class="quality-group" id="tracks-audio-group">
+        <button class="opt-btn active" data-tracks="all" data-i18n="tracks_all">Todas</button>
+        <button class="opt-btn" data-tracks="first" data-i18n="tracks_first">Solo 1ª</button>
+      </div>
+      <span class="quality-label sep-label" data-i18n="lbl_subs">Subtítulos</span>
+      <div class="quality-group" id="subs-group">
+        <button class="opt-btn active" data-subs="keep" data-i18n="subs_keep">Conservar</button>
+        <button class="opt-btn" data-subs="none" data-i18n="subs_none">Quitar</button>
+      </div>
     </div>
 
     <!-- ── Optimizar HEVC existentes (3.0) ────────────────────────────── -->
