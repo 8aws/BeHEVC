@@ -109,11 +109,16 @@
     <!-- ── Calidad + Codificador ──────────────────────────────────────── -->
     <div class="quality-row">
       <span class="quality-label" data-i18n="lbl_quality">Calidad</span>
-      <div class="quality-group">
+      <div class="quality-group" id="quality-group">
         <button class="quality-btn" data-crf="22" data-preset="slow" data-i18n="q_high">Alta calidad</button>
         <button class="quality-btn active" data-crf="28" data-preset="medium" data-i18n="q_balanced">Equilibrado</button>
         <button class="quality-btn" data-crf="34" data-preset="fast" data-i18n="q_compress">Más compresión</button>
       </div>
+      <label class="opt-check vmaf-target-label" data-i18n-title="vmaf_target_title">
+        <input type="checkbox" id="vmaf-target-toggle" />
+        <span data-i18n="vmaf_target">VMAF objetivo</span>
+      </label>
+      <input type="number" id="vmaf-target-value" class="vmaf-target-input" min="80" max="99" step="1" value="95" hidden>
       <span class="quality-label sep-label" data-i18n="lbl_encoder">Codificador</span>
       <div class="quality-group" id="encoder-group">
         <button class="encoder-btn active" data-encoder="libx265" data-i18n="enc_software">Software</button>
@@ -166,18 +171,26 @@
       </div>
     </div>
 
+    <!-- ── VMAF: verificación + estimación (aplica a toda conversión) ──── -->
+    <div class="quality-row">
+      <label class="opt-check" data-i18n-title="verify_vmaf_title">
+        <input type="checkbox" id="verify-vmaf" />
+        <span data-i18n="verify_vmaf">Verificar calidad (VMAF)</span>
+      </label>
+      <button id="btn-estimate" class="btn-outline btn-estimate" hidden data-i18n="btn_estimate">Estimar ahorro</button>
+      <span id="estimate-status" class="cpu-hint"></span>
+    </div>
+
     <!-- ── Optimizar HEVC existentes (3.0) ────────────────────────────── -->
     <div class="quality-row">
       <label class="opt-check" data-i18n-title="opt_hevc_title">
         <input type="checkbox" id="opt-hevc" />
         <span data-i18n="opt_hevc">Optimizar HEVC existentes</span>
       </label>
-      <button id="btn-estimate" class="btn-outline btn-estimate" hidden data-i18n="btn_estimate">Estimar ahorro</button>
       <span id="verdict-thresholds" class="verdict-thresholds" hidden>
         <label><span data-i18n="th_quality">VMAF ≥</span> <input type="number" id="th-vmaf" min="50" max="100" step="1"></label>
         <label><span data-i18n="th_savings">Ahorro ≥</span> <input type="number" id="th-savings" min="0" max="90" step="1">%</label>
       </span>
-      <span id="estimate-status" class="cpu-hint"></span>
     </div>
 
     <!-- ── Acciones ──────────────────────────────────────────────────── -->

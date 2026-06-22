@@ -405,11 +405,15 @@ async fn estimate_savings(
     ffprobe_path: String,
     concurrency: Option<usize>,
     vmaf: Option<bool>,
+    target_vmaf: Option<f64>,
 ) -> Result<(), String> {
     let concurrency = concurrency.unwrap_or_else(default_concurrency).max(1);
     let with_vmaf = vmaf.unwrap_or(true);
     std::thread::spawn(move || {
-        estimator::run_estimation(app, paths, settings, ffmpeg_path, ffprobe_path, concurrency, with_vmaf);
+        estimator::run_estimation(
+            app, paths, settings, ffmpeg_path, ffprobe_path,
+            concurrency, with_vmaf, target_vmaf,
+        );
     });
     Ok(())
 }
@@ -490,6 +494,28 @@ fn list_hw_encoders(ffmpeg_path: String) -> Vec<HwEncoder> {
         .collect()
 }
 
+/// Persiste la cola de archivos en app_data_dir/queue.json.
+/// Si queue_json está vacío, elimina el archivo (limpia la cola guardada).
+#[tauri::command]
+fn save_queue(app: AppHandle, queue_json: String) -> Result<(), String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join("queue.json");
+    if queue_json.is_empty() {
+        let _ = std::fs::remove_file(&path);
+        return Ok(());
+    }
+    std::fs::write(&path, queue_json).map_err(|e| e.to_string())
+}
+
+/// Carga la cola guardada. Devuelve None si no existe.
+#[tauri::command]
+fn load_queue(app: AppHandle) -> Option<String> {
+    let dir = app.path().app_data_dir().ok()?;
+    let path = dir.join("queue.json");
+    std::fs::read_to_string(&path).ok()
+}
+
 /// Abre una URL en el navegador por defecto del sistema operativo
 #[tauri::command]
 fn open_url(url: String) {
@@ -529,6 +555,8 @@ pub fn run() {
             open_folder,
             open_url,
             list_hw_encoders,
+            save_queue,
+            load_queue,
         ])
         .run(tauri::generate_context!())
         .expect("Error arrancando BeHEVC");

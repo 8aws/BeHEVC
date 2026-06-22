@@ -44,6 +44,8 @@ const state = {
   estMinVmaf:         93,       // umbral VMAF para veredicto "Recomendado"
   estMinSavings:      15,       // umbral % ahorro para veredicto "Recomendado"
   genWarned:          false,    // aviso de pérdida generacional ya mostrado (sesión)
+  vmafTarget:         null,     // null = CRF manual, número = VMAF objetivo (búsqueda CRF)
+  verifyVmaf:         false,    // verificar VMAF tras cada conversión
   jobIndexMap:        {},   // jobIdx → fileIdx en state.files
   estimateIndexMap:   {},   // estIdx → fileIdx (precálculo 3.0)
   lastConvertingIdx:  -1,   // último file_index visto en conversion-progress
@@ -132,9 +134,13 @@ function updateButtonStates() {
     btn.style.opacity = btn.disabled ? '0.28' : '1';
   });
 
-  // Botón "Estimar ahorro": visible con el modo HEVC activo y algún HEVC seleccionado
+  // Botón "Estimar ahorro":
+  //  - Con VMAF target activo: visible si hay archivos pendientes (cualquier codec)
+  //  - Con optimizeHevc activo: visible si hay algún HEVC
   const anyHevc = state.files.some(f => f.isHevc);
-  btnEstimate.hidden   = !(state.optimizeHevc && anyHevc);
+  const anyToConvert = state.files.some(f => f.needs_conversion);
+  const showEstimate = (state.vmafTarget && anyToConvert) || (state.optimizeHevc && anyHevc);
+  btnEstimate.hidden   = !showEstimate;
   btnEstimate.disabled = busy;
   $('verdict-thresholds').hidden = !state.optimizeHevc;
 
@@ -280,6 +286,7 @@ async function init() {
       appendLog(t('log_paused', { n: remaining }));
       updateStats();
       updateButtonStates();
+      saveQueue();
       return;
     }
 
@@ -290,6 +297,7 @@ async function init() {
       progGlobal.style.width = '100%';
       markAllDone();
       showCompletionBanner();
+      saveQueue();
       // Historial: acumular el ahorro real de esta sesión
       if (state.totalOriginal > state.totalOutput) {
         addTotalSaved(state.totalOriginal - state.totalOutput);
@@ -350,11 +358,14 @@ async function init() {
     if (payload.ok) {
       f.estSavings = payload.savings_pct;
       f.estSize    = payload.estimated_size;
-      f.estVmaf    = payload.vmaf;   // puede ser null si libvmaf no está
+      f.estVmaf    = payload.vmaf;
       f.estFail    = false;
+      if (payload.optimal_crf != null) f.optimalCrf = payload.optimal_crf;
     } else {
       f.estSavings = null;
       f.estFail    = true;
+      f.estVmaf    = payload.vmaf;  // mejor VMAF alcanzado (aunque no llegue al objetivo)
+      if (state.vmafTarget) f.optimalCrf = null;
     }
     const row = fileListBody.querySelector(`tr[data-file-index="${fileIdx}"]`);
     if (row) row.querySelector('.col-savings').innerHTML = estChip(f) || marginChip(f);
@@ -379,15 +390,41 @@ async function init() {
     updateButtonStates();
   });
 
+  // ── file-skipped: destino ya existía → saltado sin pisar ───────────────
+  await listen('file-skipped', ({ payload }) => {
+    setFileRowStatus(payload, 'skipped');
+  });
+
   // ── file-optimal: recompresión que no encogía → original conservado ────
   await listen('file-optimal', ({ payload }) => {
     setFileRowStatus(payload, 'optimal');
   });
 
-  // ── Aviso al cerrar si hay tareas en marcha ────────────────────────────
+  // ── vmaf-verify: resultado VMAF post-conversión ───────────────────────
+  await listen('vmaf-verify', ({ payload }) => {
+    const fileIdx = state.jobIndexMap[payload.file_index];
+    if (fileIdx === undefined) return;
+    const f = state.files[fileIdx];
+    if (!f) return;
+    f.verifiedVmaf = payload.vmaf;
+    const row = fileListBody.querySelector(`tr[data-file-index="${fileIdx}"]`);
+    const cell = row?.querySelector('.col-savings');
+    if (cell && payload.vmaf != null) {
+      const v = payload.vmaf.toFixed(0);
+      const isLow = payload.vmaf < state.estMinVmaf;
+      const chip = isLow
+        ? `<span class="est est-bad" title="VMAF ${payload.vmaf.toFixed(1)}">${t('vmaf_warn', { v, min: state.estMinVmaf })}</span>`
+        : `<span class="est est-good" title="VMAF ${payload.vmaf.toFixed(1)}">${t('vmaf_ok', { v })}</span>`;
+      const existing = f.savings ? f.savings + ' ' : '';
+      cell.innerHTML = existing + chip;
+    }
+  });
+
+  // ── Aviso al cerrar si hay tareas en marcha + guardar cola ──────────
   try {
     const win = window.__TAURI__.window.getCurrentWindow();
     await win.onCloseRequested(async (event) => {
+      saveQueue();
       if (state.isProcessing || state.isScanning || state.isEstimating) {
         let ok = false;
         try {
@@ -398,6 +435,9 @@ async function init() {
       }
     });
   } catch (_) { /* API de ventana no disponible — sin aviso */ }
+
+  // Restaurar cola de la sesión anterior (si existe)
+  await tryRestoreQueue();
 }
 
 // formatBytes / formatEta / verdictKey viven en logic.js (cargado antes que main.js)
@@ -486,7 +526,9 @@ async function launchConversion() {
   let jobIdx = 0;
   state.files.forEach((f, fileIdx) => {
     if (f.needs_conversion && f.status !== 'done' && f.status !== 'error') {
-      jobs.push({ input: f.path, output: f.output_path, recompress: !!f.isHevc });
+      const job = { input: f.path, output: f.output_path, recompress: !!f.isHevc };
+      if (f.optimalCrf != null) job.crf_override = f.optimalCrf;
+      jobs.push(job);
       state.jobIndexMap[jobIdx] = fileIdx;
       jobIdx++;
     }
@@ -533,7 +575,7 @@ async function launchConversion() {
   try {
     await invoke('start_conversion', {
       jobs,
-      settings: { encoder: state.encoder, crf: q.crf, preset: q.preset, audio: state.audio, scale: state.scale, audioTracks: state.audioTracks, subs: state.subs },
+      settings: { encoder: state.encoder, crf: q.crf, preset: q.preset, audio: state.audio, scale: state.scale, audioTracks: state.audioTracks, subs: state.subs, verifyVmaf: state.verifyVmaf },
       ffmpegPath:   state.ffmpegPath,
       ffprobePath:  state.ffprobePath,
       backupFolder: state.backupFolder,
@@ -578,6 +620,78 @@ btnOpenOutput.addEventListener('click', () => {
   if (state.outputFolder) invoke('open_folder', { path: state.outputFolder });
 });
 
+// ── Cola persistente ─────────────────────────────────────────────────────
+
+function saveQueue() {
+  if (!state.files.length) {
+    invoke('save_queue', { queueJson: '' }).catch(() => {});
+    return;
+  }
+  const data = {
+    files: state.files.map(f => ({
+      path: f.path, name: f.name, codec: f.codec,
+      needs_conversion: f.needs_conversion, output_path: f.output_path,
+      size: f.size, bitrate: f.bitrate, bpp: f.bpp, margin: f.margin,
+      status: f.status, isHevc: f.isHevc, recompress: f.recompress,
+      savings: f.savings || null,
+      estSavings: f.estSavings ?? null, estSize: f.estSize ?? null,
+      estVmaf: f.estVmaf ?? null, estFail: f.estFail || false,
+      optimalCrf: f.optimalCrf ?? null,
+    })),
+    outputFolder: state.outputFolder,
+    backupFolder: state.backupFolder,
+    totalOriginal: state.totalOriginal,
+    totalOutput: state.totalOutput,
+    filesDone: state.filesDone,
+  };
+  invoke('save_queue', { queueJson: JSON.stringify(data) }).catch(() => {});
+}
+
+async function tryRestoreQueue() {
+  try {
+    const json = await invoke('load_queue');
+    if (!json) return;
+    const data = JSON.parse(json);
+    if (!data?.files?.length) return;
+    const pending = data.files.filter(f =>
+      f.status === 'pending' || f.status === 'queued' || f.status === 'converting');
+    if (!pending.length) {
+      invoke('save_queue', { queueJson: '' }).catch(() => {});
+      return;
+    }
+    let ok = true;
+    try {
+      const dlg = window.__TAURI__.dialog;
+      if (dlg && dlg.ask) {
+        ok = await dlg.ask(t('queue_restore', { n: data.files.length }), { title: 'B265' });
+      }
+    } catch (_) {}
+    if (!ok) {
+      invoke('save_queue', { queueJson: '' }).catch(() => {});
+      return;
+    }
+    state.files = data.files.map(f => {
+      if (f.status === 'queued' || f.status === 'converting') f.status = 'pending';
+      return f;
+    });
+    if (data.outputFolder) {
+      state.outputFolder = data.outputFolder;
+      $('output-path').textContent = t('dest_prefix') + data.outputFolder;
+    }
+    if (data.backupFolder) {
+      state.backupFolder = data.backupFolder;
+      $('backup-path').textContent = t('backup_prefix') + data.backupFolder;
+    }
+    state.totalOriginal = data.totalOriginal || 0;
+    state.totalOutput   = data.totalOutput || 0;
+    state.filesDone     = data.filesDone || 0;
+    renderFileList();
+    updateStats();
+    updateButtonStates();
+    appendLog(t('queue_restored', { n: data.files.length }));
+  } catch (_) {}
+}
+
 // Vacía la lista/cola y deja la app lista para un lote nuevo.
 function clearList() {
   state.files             = [];
@@ -588,6 +702,7 @@ function clearList() {
   state.totalOriginal     = 0;
   state.totalOutput       = 0;
   state.isPaused          = false;
+  saveQueue();
   btnPause.hidden         = true;
   btnStart.textContent    = t('btn_start');
   fileMeta.textContent    = '';
@@ -691,6 +806,7 @@ async function analyzeFiles(paths) {
   renderFileList();
   updateStats();
   updateButtonStates();
+  saveQueue();
 }
 
 // ── Selección de recompresión HEVC (3.0) ───────────────────────────────────
@@ -770,8 +886,25 @@ function estVerdict(f) {
 
 // Chip de ahorro estimado por muestreo + VMAF + veredicto (precálculo 3.0).
 function estChip(f) {
-  if (f.estFail) return `<span class="margin margin-low">${t('est_fail')}</span>`;
+  if (f.estFail) {
+    if (state.vmafTarget && f.optimalCrf == null) {
+      const best = f.estVmaf != null ? ` (max VMAF ${f.estVmaf.toFixed(0)})` : '';
+      return `<span class="est est-bad" title="${t('vmaf_crf_fail')}${best}">${t('vmaf_crf_fail')}${best}</span>`;
+    }
+    return `<span class="margin margin-low">${t('est_fail')}</span>`;
+  }
   if (f.estSavings === null || f.estSavings === undefined) return '';
+
+  // CRF search result (VMAF target mode)
+  if (f.optimalCrf != null) {
+    const vmaf = f.estVmaf != null ? f.estVmaf.toFixed(0) : '?';
+    const pct = f.estSavings > 0 ? f.estSavings.toFixed(0) : '0';
+    const tip = `${formatBytes(f.size || 0)} → ${formatBytes(f.estSize || 0)} · VMAF ${f.estVmaf != null ? f.estVmaf.toFixed(1) : '?'}`;
+    const meetsTarget = !state.vmafTarget || f.estVmaf == null || f.estVmaf >= state.vmafTarget;
+    const cls = meetsTarget ? 'est-good' : 'est-mid';
+    const warn = meetsTarget ? '' : ` ⚠ < ${state.vmafTarget}`;
+    return `<span class="est ${cls}" title="${tip}">${t('vmaf_crf_chip', { crf: f.optimalCrf, vmaf, pct })}${warn}</span>`;
+  }
 
   // Caso "no encoge": saldría más grande
   if (f.estSavings < 0) {
@@ -1160,6 +1293,37 @@ $('opt-hevc').addEventListener('change', e => {
   saveSettings();
 });
 
+// ── VMAF objetivo (búsqueda binaria de CRF) ────────────────────────────────
+
+$('vmaf-target-toggle').addEventListener('change', e => {
+  if (state.isProcessing) { e.target.checked = !!state.vmafTarget; return; }
+  if (e.target.checked) {
+    state.vmafTarget = parseInt($('vmaf-target-value').value) || 95;
+    $('vmaf-target-value').hidden = false;
+    $('quality-group').classList.add('dimmed');
+  } else {
+    state.vmafTarget = null;
+    $('vmaf-target-value').hidden = true;
+    $('quality-group').classList.remove('dimmed');
+  }
+  saveSettings();
+});
+
+$('vmaf-target-value').addEventListener('change', e => {
+  const v = parseInt(e.target.value);
+  if (!isNaN(v)) state.vmafTarget = Math.max(80, Math.min(99, v));
+  e.target.value = state.vmafTarget;
+  saveSettings();
+});
+
+// ── Verificar calidad VMAF post-conversión ──────────────────────────────────
+
+$('verify-vmaf').addEventListener('change', e => {
+  if (state.isProcessing) { e.target.checked = state.verifyVmaf; return; }
+  state.verifyVmaf = e.target.checked;
+  saveSettings();
+});
+
 // Umbrales de veredicto configurables (recalculan los chips al vuelo)
 $('th-vmaf').addEventListener('change', e => {
   const v = parseInt(e.target.value);
@@ -1177,12 +1341,16 @@ $('th-savings').addEventListener('change', e => {
 // Botón "Estimar ahorro": muestrea los HEVC seleccionados y rellena la columna Ahorro
 btnEstimate.addEventListener('click', async () => {
   if (state.isProcessing || btnEstimate.disabled) return;
-  // Estima TODOS los HEVC (no solo los marcados) para decidir mejor antes de seleccionar
+  // Con VMAF target: estimar todos los que se van a convertir (cualquier codec).
+  // Sin VMAF target: solo los HEVC (para evaluar recompresión).
   state.estimateIndexMap = {};
   const paths = [];
   let estIdx = 0;
   state.files.forEach((f, fileIdx) => {
-    if (f.isHevc) {
+    const include = state.vmafTarget
+      ? f.needs_conversion   // VMAF target: todo lo que se va a convertir
+      : f.isHevc;            // Sin target: solo HEVC (estimación de recompresión)
+    if (include) {
       paths.push(f.path);
       state.estimateIndexMap[estIdx++] = fileIdx;
     }
@@ -1192,7 +1360,11 @@ btnEstimate.addEventListener('click', async () => {
   state.isEstimating = true;
   btnEstimate.disabled = true;
   estimateStatus.textContent = t('btn_estimating', { current: 0, total: paths.length });
-  appendLog(t('log_estimating', { n: paths.length }));
+  if (state.vmafTarget) {
+    appendLog(t('log_vmaf_search', { target: state.vmafTarget, n: paths.length }));
+  } else {
+    appendLog(t('log_estimating', { n: paths.length }));
+  }
 
   const q = state.quality;
   try {
@@ -1203,6 +1375,7 @@ btnEstimate.addEventListener('click', async () => {
       ffprobePath: state.ffprobePath,
       concurrency: state.concurrency === 'auto' ? null : parseInt(state.concurrency),
       vmaf:        true,
+      targetVmaf:  state.vmafTarget || null,
     });
   } catch (e) {
     appendLog(t('log_error', { e }));
@@ -1306,6 +1479,7 @@ function currentProfile() {
     concurrency: state.concurrency,
     optimizeHevc: state.optimizeHevc,
     estMinVmaf: state.estMinVmaf, estMinSavings: state.estMinSavings,
+    vmafTarget: state.vmafTarget, verifyVmaf: state.verifyVmaf,
   };
 }
 
@@ -1322,6 +1496,8 @@ function applyProfileObject(p) {
   state.optimizeHevc = !!p.optimizeHevc;
   if (typeof p.estMinVmaf === 'number')    state.estMinVmaf = p.estMinVmaf;
   if (typeof p.estMinSavings === 'number') state.estMinSavings = p.estMinSavings;
+  state.vmafTarget  = typeof p.vmafTarget === 'number' ? p.vmafTarget : null;
+  state.verifyVmaf  = !!p.verifyVmaf;
 }
 
 // Sincroniza TODOS los controles de la UI con el estado actual.
@@ -1346,6 +1522,12 @@ function syncControlsFromState() {
   $('opt-hevc').checked = state.optimizeHevc;
   $('th-vmaf').value    = state.estMinVmaf;
   $('th-savings').value = state.estMinSavings;
+  $('vmaf-target-toggle').checked = !!state.vmafTarget;
+  $('vmaf-target-value').value    = state.vmafTarget || 95;
+  $('vmaf-target-value').hidden   = !state.vmafTarget;
+  if (state.vmafTarget) $('quality-group').classList.add('dimmed');
+  else                  $('quality-group').classList.remove('dimmed');
+  $('verify-vmaf').checked = state.verifyVmaf;
 }
 
 function saveSettings() {

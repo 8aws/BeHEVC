@@ -22,6 +22,9 @@ pub struct ConversionJob {
     /// resultado no es más pequeño que el original, se descarta y se conserva el original.
     #[serde(default)]
     pub recompress: bool,
+    /// CRF óptimo encontrado por búsqueda VMAF. Si presente, sustituye al CRF global.
+    #[serde(default)]
+    pub crf_override: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +50,9 @@ pub struct ConversionSettings {
     /// Subtítulos: "keep" (conservar) o "none" (descartar).
     #[serde(default = "default_subs")]
     pub subs: String,
+    /// Verificar calidad VMAF tras cada conversión (muestrea original vs salida).
+    #[serde(default)]
+    pub verify_vmaf: bool,
 }
 
 fn default_encoder() -> String { "libx265".to_string() }
@@ -72,6 +78,7 @@ impl Default for ConversionSettings {
             scale: default_scale(),
             audio_tracks: default_tracks(),
             subs: default_subs(),
+            verify_vmaf: false,
         }
     }
 }
@@ -96,6 +103,13 @@ pub struct FileDoneEvent {
     pub file_index:    usize,
     pub original_size: u64,
     pub output_size:   u64,
+}
+
+/// Emitido tras medir el VMAF post-conversión de un archivo.
+#[derive(Debug, Clone, Serialize)]
+pub struct VmafVerifyEvent {
+    pub file_index: usize,
+    pub vmaf:       Option<f64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -240,6 +254,13 @@ fn process_one_file(
     if *cancelled.lock().unwrap() { return false; }
     let en = lang == "en";
 
+    // CRF override per-file (búsqueda VMAF): sustituye el CRF global si existe.
+    let settings = match job.crf_override {
+        Some(crf) => { let mut s = settings.clone(); s.crf = crf; s }
+        None => settings.clone(),
+    };
+    let settings = &settings;
+
     let input_path = Path::new(&job.input);
     let file_name  = input_path.file_name()
         .and_then(|n| n.to_str()).unwrap_or("?").to_string();
@@ -257,24 +278,40 @@ fn process_one_file(
         let _ = std::fs::create_dir_all(parent);
     }
 
+    // Si el destino ya existe, añadir sufijo numérico (_2, _3…)
+    let output = if Path::new(&job.output).exists() {
+        let new_path = next_available_path(&job.output);
+        let new_name = Path::new(&new_path).file_name()
+            .and_then(|n| n.to_str()).unwrap_or("?");
+        let m = if en {
+            format!("   {} already exists → saving as {}\n", job.output, new_name)
+        } else {
+            format!("   {} ya existe → guardando como {}\n", job.output, new_name)
+        };
+        emit_log(app, progresses, index, total, &file_name, 0.0, &m);
+        new_path
+    } else {
+        job.output.clone()
+    };
+
     // ── Intento 1: mapeo completo (sin cover art) ──────────────────────────
     let (exit_ok, was_cancelled) = run_ffmpeg_pass(
         app, index, total, &file_name, duration,
-        &job.input, &job.output,
+        &job.input, &output,
         settings, ffmpeg_path,
         &MappingMode::Full,
         cancelled, progresses, &color_args, lang,
     );
     if was_cancelled {
-        let _ = std::fs::remove_file(&job.output);
+        let _ = std::fs::remove_file(&output);
         return false;
     }
 
-    let output_valid = exit_ok && validate_output(&job.output, ffprobe_path, duration);
+    let output_valid = exit_ok && validate_output(&output, ffprobe_path, duration);
 
     // ── Intento 2 (fallback): solo vídeo + audio, en software ──────────────
     let (exit_ok2, was_cancelled2) = if !output_valid {
-        let _ = std::fs::remove_file(&job.output);
+        let _ = std::fs::remove_file(&output);
 
         let mut fallback_settings = settings.clone();
         let note = if fallback_settings.is_hardware() {
@@ -289,7 +326,7 @@ fn process_one_file(
 
         run_ffmpeg_pass(
             app, index, total, &file_name, duration,
-            &job.input, &job.output,
+            &job.input, &output,
             &fallback_settings, ffmpeg_path,
             &MappingMode::PrimaryOnly,
             cancelled, progresses, &color_args, lang,
@@ -298,34 +335,34 @@ fn process_one_file(
         (true, false)
     };
     if was_cancelled2 {
-        let _ = std::fs::remove_file(&job.output);
+        let _ = std::fs::remove_file(&output);
         return false;
     }
 
     // ── Evaluar resultado final ────────────────────────────────────────────
-    let final_valid = if !output_valid { validate_output(&job.output, ffprobe_path, duration) } else { true };
+    let final_valid = if !output_valid { validate_output(&output, ffprobe_path, duration) } else { true };
 
     if output_valid || final_valid {
         set_progress(progresses, index, 1.0);
 
         // Tamaños para calcular el ahorro de espacio
         let original_size = std::fs::metadata(input_path).map(|m| m.len()).unwrap_or(0);
-        let output_size   = std::fs::metadata(&job.output).map(|m| m.len()).unwrap_or(0);
+        let output_size   = std::fs::metadata(&output).map(|m| m.len()).unwrap_or(0);
 
-        // Seguridad de recompresión (3.0): si recomprimir un HEVC NO encoge, descartar
-        // el resultado y conservar el original intacto. Nunca empeorar un archivo.
-        if job.recompress && original_size > 0 && output_size >= original_size {
-            let _ = std::fs::remove_file(&job.output);
+        // Seguridad: si el resultado NO encoge, descartar y conservar el original.
+        // Aplica a recompresiones HEVC y a conversiones con VMAF target (crf_override).
+        if (job.recompress || job.crf_override.is_some()) && original_size > 0 && output_size >= original_size {
+            let _ = std::fs::remove_file(&output);
             let _ = app.emit("file-optimal", index);
             let m = if en {
-                format!("↔ {} was already optimal: recompressing saves nothing ({} → {}); original kept\n",
+                format!("↔ {} — conversion doesn't reduce size ({} → {}); original kept\n",
                     file_name, human_size(original_size), human_size(output_size))
             } else {
-                format!("↔ {} ya estaba óptimo: recomprimir no ahorra ({} → {}); original conservado\n",
+                format!("↔ {} — la conversión no reduce tamaño ({} → {}); original conservado\n",
                     file_name, human_size(original_size), human_size(output_size))
             };
             emit_log(app, progresses, index, total, &file_name, 1.0, &m);
-            return false; // no cuenta como convertido; el original no se mueve a backup
+            return false;
         }
 
         let _ = app.emit("file-done", FileDoneEvent {
@@ -342,9 +379,21 @@ fn process_one_file(
         let m = if en { format!("✔ {} converted successfully{}\n", file_name, saved) }
                 else  { format!("✔ {} convertido correctamente{}\n", file_name, saved) };
         emit_log(app, progresses, index, total, &file_name, 1.0, &m);
+
+        // Verificación VMAF post-conversión (si está activada)
+        if settings.verify_vmaf {
+            let vmaf = crate::estimator::verify_vmaf(&job.input, &output, duration, ffmpeg_path);
+            let _ = app.emit("vmaf-verify", VmafVerifyEvent { file_index: index, vmaf });
+            if let Some(v) = vmaf {
+                let m = if en { format!("   VMAF quality: {:.1}\n", v) }
+                        else  { format!("   Calidad VMAF: {:.1}\n", v) };
+                emit_log(app, progresses, index, total, &file_name, 1.0, &m);
+            }
+        }
+
         true
     } else {
-        let _ = std::fs::remove_file(&job.output);
+        let _ = std::fs::remove_file(&output);
         let reason = if !exit_ok && !exit_ok2 {
             if en { "ffmpeg failed on both attempts" }
             else  { "ffmpeg terminó con error en ambos intentos" }
@@ -701,6 +750,34 @@ fn build_color_args(tags: &crate::detector::ColorTags) -> Vec<String> {
     a
 }
 
+/// Si `path` ya existe, devuelve el siguiente nombre libre añadiendo _2, _3…
+/// Ejemplo: "movie.hevc.mkv" → "movie.hevc_2.mkv" → "movie.hevc_3.mkv"
+fn next_available_path(path: &str) -> String {
+    let p = Path::new(path);
+    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
+    let parent = p.parent().unwrap_or(Path::new("."));
+    for i in 2..=999 {
+        let name = if ext.is_empty() {
+            format!("{}_{}", stem, i)
+        } else {
+            format!("{}_{}.{}", stem, i, ext)
+        };
+        let candidate = parent.join(&name);
+        if !candidate.exists() {
+            return candidate.to_string_lossy().to_string();
+        }
+    }
+    parent.join(format!("{}_{}.{}", stem, chrono_fallback(), ext))
+        .to_string_lossy().to_string()
+}
+
+fn chrono_fallback() -> String {
+    let d = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    format!("{}", d.as_secs())
+}
+
 /// Traduce el preset genérico (slow/medium/fast) al esquema p1-p7 de NVENC.
 fn nvenc_preset(preset: &str) -> &'static str {
     match preset {
@@ -744,6 +821,7 @@ mod tests {
             scale: "none".to_string(),
             audio_tracks: "all".to_string(),
             subs: "keep".to_string(),
+            verify_vmaf: false,
         }
     }
 

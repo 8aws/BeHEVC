@@ -24,6 +24,7 @@ pub struct EstimateResult {
     pub estimated_size: u64,
     pub savings_pct:    f64,         // puede ser negativo si saldría más grande
     pub vmaf:           Option<f64>, // calidad media de las muestras (None si no medida)
+    pub optimal_crf:    Option<u8>,  // CRF óptimo encontrado por búsqueda VMAF (None si no se buscó)
     pub ok:             bool,        // false si no se pudo estimar
 }
 
@@ -34,8 +35,8 @@ struct EstimateProgress {
     total:   usize,
 }
 
-const SAMPLE_POSITIONS: [f64; 3] = [0.10, 0.50, 0.90];
-const SAMPLE_SECONDS:   f64       = 4.0;
+pub(crate) const SAMPLE_POSITIONS: [f64; 3] = [0.10, 0.50, 0.90];
+pub(crate) const SAMPLE_SECONDS:   f64       = 4.0;
 
 /// Estima en paralelo el ahorro de cada archivo. Emite `estimate-result` por
 /// archivo, `estimate-progress` para avance, y `estimate-done` al terminar.
@@ -47,6 +48,7 @@ pub fn run_estimation(
     ffprobe_path: String,
     concurrency: usize,
     with_vmaf: bool,
+    target_vmaf: Option<f64>,
 ) {
     let total = paths.len();
     if total == 0 {
@@ -81,6 +83,7 @@ pub fn run_estimation(
                 let result = estimate_one(
                     index, &paths[index], settings.as_ref(),
                     ffmpeg_path.as_str(), ffprobe_path.as_str(), with_vmaf,
+                    target_vmaf,
                 );
                 let _ = app.emit("estimate-result", &result);
 
@@ -102,15 +105,21 @@ fn estimate_one(
     ffmpeg_path: &str,
     ffprobe_path: &str,
     with_vmaf: bool,
+    target_vmaf: Option<f64>,
 ) -> EstimateResult {
     let fail = EstimateResult {
-        index, original_size: 0, estimated_size: 0, savings_pct: 0.0, vmaf: None, ok: false,
+        index, original_size: 0, estimated_size: 0, savings_pct: 0.0,
+        vmaf: None, optimal_crf: None, ok: false,
     };
 
     let original_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let duration = get_duration(Path::new(path), ffprobe_path);
     if original_size == 0 || duration <= 0.0 {
         return fail;
+    }
+
+    if let Some(target) = target_vmaf {
+        return search_crf(index, path, target, settings, ffmpeg_path, duration, original_size);
     }
 
     let tmp_dir = std::env::temp_dir();
@@ -174,34 +183,33 @@ fn estimate_one(
         estimated_size: estimated,
         savings_pct: savings,
         vmaf,
+        optimal_crf: None,
         ok: true,
     }
 }
 
 /// Mide el VMAF de una muestra recomprimida (`distorted`) contra el trozo
-/// equivalente del original. Devuelve None si libvmaf no está o falla.
-/// Lee el score de stderr ("VMAF score: NN.NN") para evitar rutas de log con
-/// caracteres a escapar (problemático en Windows).
+/// equivalente del original. Extrae primero un clip de referencia con el mismo
+/// seek que se usó para codificar la muestra, evitando desincronización de frames.
 fn measure_vmaf(distorted: &str, original: &str, start: f64, dur: f64, ffmpeg_path: &str) -> Option<f64> {
-    let out = Command::new(ffmpeg_path)
-        .args([
-            "-hide_banner",
-            "-i", distorted,                          // [0:v] = distorsionado
-            "-ss", &format!("{:.3}", start),
-            "-t",  &format!("{:.3}", dur),
-            "-i", original,                           // [1:v] = referencia
-            "-lavfi", "[0:v][1:v]libvmaf",
-            "-f", "null", "-",
-        ])
+    let tmp_ref = std::env::temp_dir().join("b265_vmaf_ref.mkv");
+    let ref_str = tmp_ref.to_string_lossy().to_string();
+    let ref_ok = Command::new(ffmpeg_path)
+        .args(["-y", "-ss", &format!("{:.3}", start), "-t", &format!("{:.3}", dur),
+               "-i", original, "-c", "copy", "-f", "matroska", &ref_str])
         .output()
-        .ok()?;
-
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    parse_vmaf(&stderr)
+        .map(|o| o.status.success()).unwrap_or(false);
+    if !ref_ok {
+        let _ = std::fs::remove_file(&tmp_ref);
+        return None;
+    }
+    let result = measure_vmaf_nosync(distorted, &ref_str, ffmpeg_path);
+    let _ = std::fs::remove_file(&tmp_ref);
+    result
 }
 
 /// Extrae el score de la línea "VMAF score: NN.NN" de la salida de ffmpeg.
-fn parse_vmaf(stderr: &str) -> Option<f64> {
+pub(crate) fn parse_vmaf(stderr: &str) -> Option<f64> {
     for line in stderr.lines() {
         if let Some(idx) = line.find("VMAF score:") {
             let rest = &line[idx + "VMAF score:".len()..];
@@ -257,6 +265,216 @@ fn build_sample_args(input: &str, start: f64, dur: f64,
     args.extend(["-f".into(), "matroska".into()]);
     args.push(output.to_string());
     args
+}
+
+// ---------------------------------------------------------------------------
+// Búsqueda binaria de CRF por VMAF objetivo
+// ---------------------------------------------------------------------------
+
+fn search_crf(
+    index: usize,
+    path: &str,
+    target: f64,
+    settings: &ConversionSettings,
+    ffmpeg_path: &str,
+    duration: f64,
+    original_size: u64,
+) -> EstimateResult {
+    let fail = EstimateResult {
+        index, original_size, estimated_size: 0, savings_pct: 0.0,
+        vmaf: None, optimal_crf: None, ok: false,
+    };
+
+    let tmp_dir = std::env::temp_dir();
+    let start = duration * 0.5;
+    let dur = SAMPLE_SECONDS.min((duration - start).max(0.0));
+    if dur < 0.5 { return fail; }
+
+    // Paso 0: extraer un clip de referencia (copia sin recodificar).
+    // Todas las muestras se codifican DESDE este clip, y el VMAF se mide
+    // contra este clip — así los frames siempre coinciden exactamente.
+    let ref_clip = tmp_dir.join(format!("b265_ref_{}.mkv", index));
+    let ref_str = ref_clip.to_string_lossy().to_string();
+    let ref_ok = Command::new(ffmpeg_path)
+        .args(["-y", "-ss", &format!("{:.3}", start), "-t", &format!("{:.3}", dur),
+               "-i", path, "-c", "copy", "-f", "matroska", &ref_str])
+        .output()
+        .map(|o| o.status.success()).unwrap_or(false);
+    if !ref_ok {
+        let _ = std::fs::remove_file(&ref_clip);
+        return fail;
+    }
+
+    let mut lo: u8 = 18;
+    let mut hi: u8 = 40;
+    let mut best_crf: Option<u8> = None;
+    let mut best_vmaf: Option<f64> = None;
+    let mut best_size: u64 = 0;
+    let mut highest_vmaf: Option<f64> = None;
+
+    while lo <= hi {
+        let mid = lo + (hi - lo) / 2;
+        let mut test = settings.clone();
+        test.crf = mid;
+
+        let tmp = tmp_dir.join(format!("b265_search_{}_{}.mkv", index, mid));
+        let tmp_str = tmp.to_string_lossy().to_string();
+
+        let mut fallback = test.clone();
+        fallback.encoder = "libx265".to_string();
+
+        // Codificar desde el clip de referencia (no desde el original)
+        let mut ok = encode_sample(ffmpeg_path, &ref_str, 0.0, dur, &test, &tmp_str);
+        if !ok && test.is_hardware() {
+            ok = encode_sample(ffmpeg_path, &ref_str, 0.0, dur, &fallback, &tmp_str);
+        }
+
+        // VMAF: comparar distorsionado vs referencia (ambos empiezan en t=0, sin seek)
+        let vmaf = if ok {
+            measure_vmaf_nosync(&tmp.to_string_lossy(), &ref_str, ffmpeg_path)
+        } else {
+            None
+        };
+
+        let sample_size = if ok {
+            std::fs::metadata(&tmp).map(|m| m.len()).unwrap_or(0)
+        } else { 0 };
+        let _ = std::fs::remove_file(&tmp);
+
+        match vmaf {
+            Some(v) if v >= target => {
+                best_crf = Some(mid);
+                best_vmaf = Some(v);
+                if dur > 0.0 && sample_size > 0 {
+                    best_size = ((sample_size as f64 / dur) * duration) as u64;
+                }
+                if highest_vmaf.map_or(true, |h| v > h) { highest_vmaf = Some(v); }
+                lo = mid + 1;
+            }
+            Some(v) => {
+                if highest_vmaf.map_or(true, |h| v > h) { highest_vmaf = Some(v); }
+                if mid == 0 { break; }
+                hi = mid - 1;
+            }
+            None => {
+                let _ = std::fs::remove_file(&ref_clip);
+                return fail;
+            }
+        }
+    }
+
+    if let Some(crf) = best_crf {
+        let _ = std::fs::remove_file(&ref_clip);
+        let savings = if original_size > 0 && best_size > 0 {
+            (1.0 - best_size as f64 / original_size as f64) * 100.0
+        } else { 0.0 };
+        EstimateResult {
+            index, original_size, estimated_size: best_size,
+            savings_pct: savings, vmaf: best_vmaf, optimal_crf: Some(crf), ok: true,
+        }
+    } else {
+        // No se alcanzó el objetivo: ofrecer CRF 18 (máxima calidad posible)
+        // con el VMAF real para que el usuario decida.
+        // Estimar tamaño con CRF 18 desde el ref_clip (frame-accurate).
+        let mut est_size = 0u64;
+        let mut test18 = settings.clone();
+        test18.crf = 18;
+        let tmp18 = tmp_dir.join(format!("b265_search_{}_18f.mkv", index));
+        let tmp18_str = tmp18.to_string_lossy().to_string();
+        let mut fb18 = test18.clone();
+        fb18.encoder = "libx265".to_string();
+        let mut ok18 = encode_sample(ffmpeg_path, &ref_str, 0.0, dur, &test18, &tmp18_str);
+        if !ok18 && test18.is_hardware() {
+            ok18 = encode_sample(ffmpeg_path, &ref_str, 0.0, dur, &fb18, &tmp18_str);
+        }
+        if ok18 {
+            if let Ok(m) = std::fs::metadata(&tmp18) {
+                est_size = ((m.len() as f64 / dur) * duration) as u64;
+            }
+        }
+        let _ = std::fs::remove_file(&tmp18);
+        let _ = std::fs::remove_file(&ref_clip);
+        let savings = if original_size > 0 && est_size > 0 {
+            (1.0 - est_size as f64 / original_size as f64) * 100.0
+        } else { 0.0 };
+        EstimateResult {
+            index, original_size, estimated_size: est_size, savings_pct: savings,
+            vmaf: highest_vmaf, optimal_crf: Some(18), ok: true,
+        }
+    }
+}
+
+/// VMAF entre dos clips que empiezan en t=0 (sin seeking — frame-accurate).
+fn measure_vmaf_nosync(distorted: &str, reference: &str, ffmpeg_path: &str) -> Option<f64> {
+    let out = Command::new(ffmpeg_path)
+        .args([
+            "-hide_banner",
+            "-i", distorted,
+            "-i", reference,
+            "-lavfi", "[0:v][1:v]libvmaf",
+            "-f", "null", "-",
+        ])
+        .output()
+        .ok()?;
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    parse_vmaf(&stderr)
+}
+
+// ---------------------------------------------------------------------------
+// Verificación VMAF post-conversión (usado por converter.rs)
+// ---------------------------------------------------------------------------
+
+/// Mide el VMAF medio de un archivo convertido vs el original, muestreando en
+/// 3 posiciones (10/50/90%). Devuelve None si libvmaf no está o todas las
+/// mediciones fallan.
+pub(crate) fn verify_vmaf(
+    input: &str,
+    output: &str,
+    duration: f64,
+    ffmpeg_path: &str,
+) -> Option<f64> {
+    let mut scores = Vec::new();
+    for pos in &SAMPLE_POSITIONS {
+        let start = duration * pos;
+        let dur = SAMPLE_SECONDS.min((duration - start).max(0.0));
+        if dur < 0.5 { continue; }
+        if let Some(v) = measure_vmaf_full(output, input, start, dur, ffmpeg_path) {
+            scores.push(v);
+        }
+    }
+    if scores.is_empty() { None }
+    else { Some(scores.iter().sum::<f64>() / scores.len() as f64) }
+}
+
+/// VMAF entre dos archivos completos: extrae clips alineados y compara sin seek.
+fn measure_vmaf_full(
+    distorted: &str,
+    original: &str,
+    start: f64,
+    dur: f64,
+    ffmpeg_path: &str,
+) -> Option<f64> {
+    let tmp_dir = std::env::temp_dir();
+    let clip_d = tmp_dir.join("b265_vf_dist.mkv");
+    let clip_r = tmp_dir.join("b265_vf_ref.mkv");
+    let ss = format!("{:.3}", start);
+    let t  = format!("{:.3}", dur);
+
+    let extract = |input: &str, out: &str| -> bool {
+        Command::new(ffmpeg_path)
+            .args(["-y", "-ss", &ss, "-t", &t, "-i", input, "-c", "copy", "-f", "matroska", out])
+            .output().map(|o| o.status.success()).unwrap_or(false)
+    };
+
+    let ok = extract(distorted, &clip_d.to_string_lossy())
+          && extract(original, &clip_r.to_string_lossy());
+    let result = if ok {
+        measure_vmaf_nosync(&clip_d.to_string_lossy(), &clip_r.to_string_lossy(), ffmpeg_path)
+    } else { None };
+
+    let _ = std::fs::remove_file(&clip_d);
+    let _ = std::fs::remove_file(&clip_r);
+    result
 }
 
 #[cfg(test)]

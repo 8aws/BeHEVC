@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Permisos por defecto para la ventana principal de BeHEVC","local":true,"windows":["main"],"permissions":["core:default","dialog:default","dialog:allow-open","dialog:allow-ask","notification:default"]}}
+{"default":{"identifier":"default","description":"Permisos por defecto para la ventana principal de BeHEVC","local":true,"windows":["main"],"permissions":["core:default","core:window:allow-close","core:window:allow-destroy","dialog:default","dialog:allow-open","dialog:allow-ask","notification:default"]}}

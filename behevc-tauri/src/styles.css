@@ -404,6 +404,15 @@ th.col-savings { width: 190px; }
 
 .btn-estimate { font-size: 11px; padding: 5px 12px; }
 
+.vmaf-target-input {
+  width: 52px; font-family: inherit; font-size: 12px;
+  background: var(--bg2); color: var(--text);
+  border: 1px solid var(--border-mid); border-radius: 5px; padding: 3px 6px;
+  text-align: center;
+}
+.vmaf-target-label { white-space: nowrap; }
+.quality-group.dimmed button { opacity: 0.3; pointer-events: none; }
+
 .verdict-thresholds {
   display: inline-flex; align-items: center; gap: 14px;
   font-size: 11px; color: var(--text-dim);
