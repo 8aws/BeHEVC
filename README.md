@@ -39,4 +39,4 @@ Requires [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), and the [Ta
 
 ## License
 
-Proprietary. See [b265.uverse.es](https://b265.uverse.es) for distribution terms.
+[GPL v3](LICENSE) — free to use, modify, and redistribute. Derivatives must remain open source under the same license.
