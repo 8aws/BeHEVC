@@ -58,13 +58,15 @@ jobs:
     # Exponer los secrets como env para poder condicionar pasos con `if: env.X != ''`.
     # Si un secret no está configurado, ese paso se salta y el build sale sin firmar.
     env:
-      APPLE_CERTIFICATE:          ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY:     ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID:                   ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD:             ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID:              ${{ secrets.APPLE_TEAM_ID }}
-      KEYCHAIN_PASSWORD:          ${{ secrets.KEYCHAIN_PASSWORD }}
+      APPLE_CERTIFICATE:                ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD:       ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY:           ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID:                         ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD:                   ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID:                    ${{ secrets.APPLE_TEAM_ID }}
+      KEYCHAIN_PASSWORD:                ${{ secrets.KEYCHAIN_PASSWORD }}
+      TAURI_SIGNING_PRIVATE_KEY:        ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
 
     steps:
       - name: Checkout

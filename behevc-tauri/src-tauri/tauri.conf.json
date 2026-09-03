@@ -26,7 +26,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "UPDATER_PUBKEY_PLACEHOLDER",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVCRDU4QTM5OEZDOUJCRjQKUldUMHU4bVBPWXJWNjY4bDUyb3UxNWpidUhlNmRUc2Q1UUgzeDBSeG54Wkh6RHFnbk1qcFQ0aEsK",
       "endpoints": ["https://b265.uverse.es/update.json"]
     }
   },
