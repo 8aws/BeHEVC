@@ -24,6 +24,12 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "UPDATER_PUBKEY_PLACEHOLDER",
+      "endpoints": ["https://b265.uverse.es/update.json"]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

@@ -3,6 +3,19 @@
 const { invoke } = window.__TAURI__.core;
 const { listen  } = window.__TAURI__.event;
 const notif        = window.__TAURI__.notification;
+const appWindow    = window.__TAURI__.window?.getCurrentWindow?.();
+
+// Actualiza el progreso en el icono del dock (macOS) / taskbar (Windows).
+function setDockProgress(pct) {
+  try {
+    if (!appWindow) return;
+    if (pct == null) {
+      appWindow.setProgressBar({ status: 'none' });
+    } else {
+      appWindow.setProgressBar({ status: 'normal', progress: Math.round(pct) });
+    }
+  } catch (_) {}
+}
 
 // Envía una notificación nativa si el usuario concedió permiso.
 async function notify(title, body) {
@@ -229,8 +242,10 @@ async function init() {
       lastBarUpdate = now;
       if (payload.file_progress >= 0)
         progFile.style.width = (payload.file_progress * 100).toFixed(1) + '%';
-      if (payload.global_progress >= 0)
+      if (payload.global_progress >= 0) {
         progGlobal.style.width = (payload.global_progress * 100).toFixed(1) + '%';
+        setDockProgress(payload.global_progress * 100);
+      }
       if (payload.speed > 0 || payload.eta > 0) {
         const parts = [];
         if (payload.speed > 0) parts.push(`${payload.speed.toFixed(1)}×`);
@@ -272,6 +287,7 @@ async function init() {
     progFile.style.width = '0%';
     fileMeta.textContent = '';
     progFile.classList.remove('active');
+    setDockProgress(null);
     btnCancel.hidden     = true;
     btnPause.hidden      = true;
 
@@ -438,6 +454,45 @@ async function init() {
 
   // Restaurar cola de la sesión anterior (si existe)
   await tryRestoreQueue();
+
+  // Comprobar actualizaciones en background (silencioso hasta que hay algo)
+  checkForUpdates();
+}
+
+// ── Auto-update ───────────────────────────────────────────────────────────────
+
+async function checkForUpdates() {
+  try {
+    const { check } = window.__TAURI__?.updater || {};
+    if (!check) return;
+    const update = await check();
+    if (!update?.available) return;
+
+    // Hay actualización — mostrar aviso discreto en la cabecera
+    const chip = document.createElement('span');
+    chip.id        = 'update-chip';
+    chip.className = 'update-chip';
+    chip.textContent = t('update_available', { v: update.version });
+    chip.title     = update.body || '';
+    chip.addEventListener('click', () => installUpdate(update, chip));
+    $('app-version')?.after(chip);
+  } catch (_) { /* sin red o sin clave configurada — silenciar */ }
+}
+
+async function installUpdate(update, chip) {
+  if (state.isProcessing) {
+    alert(t('update_busy'));
+    return;
+  }
+  chip.textContent = t('update_downloading');
+  chip.style.pointerEvents = 'none';
+  try {
+    await update.downloadAndInstall();
+    // El instalador reinicia la app — no llegamos aquí en condiciones normales
+  } catch (e) {
+    chip.textContent = t('update_error');
+    chip.style.pointerEvents = 'auto';
+  }
 }
 
 // formatBytes / formatEta / verdictKey viven en logic.js (cargado antes que main.js)

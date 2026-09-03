@@ -169,6 +169,10 @@ const I18N = {
     notif_title:      'B265 — conversión completada',
     notif_body:       '{n} archivo(s) convertido(s)',
     notif_savings:    ' · ahorro −{pct}%',
+    update_available: '↑ v{v} disponible',
+    update_downloading: 'Descargando…',
+    update_error:     'Error al actualizar',
+    update_busy:      'Espera a que termine la conversión antes de actualizar.',
   },
 
   en: {
@@ -320,6 +324,10 @@ const I18N = {
     notif_title:      'B265 — conversion complete',
     notif_body:       '{n} file(s) converted',
     notif_savings:    ' · savings −{pct}%',
+    update_available: '↑ v{v} available',
+    update_downloading: 'Downloading…',
+    update_error:     'Update failed',
+    update_busy:      'Wait for conversion to finish before updating.',
   },
 };
 
