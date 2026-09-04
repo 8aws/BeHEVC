@@ -31,12 +31,14 @@ read_sig() {
   [[ -f "$file" ]] && cat "$file" || echo ""
 }
 
-SIG_MAC_ARM=$(read_sig "B265_${VERSION}_aarch64.dmg.sig")
-SIG_MAC_X64=$(read_sig "B265_${VERSION}_x64.dmg.sig")
-SIG_WIN_X64=$(read_sig "B265_${VERSION}_x64-setup.exe.sig")
-SIG_WIN_ARM=$(read_sig "B265_${VERSION}_arm64-setup.exe.sig")
-SIG_LIN_X64=$(read_sig "B265_${VERSION}_amd64.AppImage.sig")
-SIG_LIN_ARM=$(read_sig "B265_${VERSION}_aarch64.AppImage.sig")
+# Tauri 2 genera: <app>.app.tar.gz.sig (macOS), <setup>.nsis.zip.sig (Windows),
+# <app>.AppImage.tar.gz.sig (Linux).
+SIG_MAC_ARM=$(read_sig "B265.app.tar.gz.sig")
+SIG_MAC_X64=$(read_sig "B265.app.tar.gz.sig")  # mismo nombre, distinto job
+SIG_WIN_X64=$(read_sig "B265_${VERSION}_x64-setup.exe.nsis.zip.sig")
+SIG_WIN_ARM=$(read_sig "B265_${VERSION}_arm64-setup.exe.nsis.zip.sig")
+SIG_LIN_X64=$(read_sig "B265_${VERSION}_amd64.AppImage.tar.gz.sig")
+SIG_LIN_ARM=$(read_sig "B265_${VERSION}_aarch64.AppImage.tar.gz.sig")
 
 PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 

@@ -245,13 +245,15 @@ jobs:
           fail_on_unmatched_files: false
           files: |
             behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg.sig
             behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
-            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe.sig
             behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
-            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi.sig
             behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
-            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.sig
+            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz
+            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz.sig
+            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.nsis.zip
+            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.nsis.zip.sig
+            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.tar.gz
+            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.tar.gz.sig
 
       # ── Artefactos solo para runs manuales (depuración) ───────────────────
       # No se ejecuta en tags y nunca tumba el build (continue-on-error) por si
