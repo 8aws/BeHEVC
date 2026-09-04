@@ -245,9 +245,13 @@ jobs:
           fail_on_unmatched_files: false
           files: |
             behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg.sig
             behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe.sig
             behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
+            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi.sig
             behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+            behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.sig
 
       # ── Artefactos solo para runs manuales (depuración) ───────────────────
       # No se ejecuta en tags y nunca tumba el build (continue-on-error) por si

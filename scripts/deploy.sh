@@ -50,14 +50,12 @@ for f in "$DOWNLOADS"/B265_* "$DOWNLOADS"/BeHEVC_*; do
   fi
 done
 
+echo "→ Generando update.json con firmas del updater…"
+./scripts/make_update_json.sh "$VERSION"
+
 echo "→ Desplegando web…"
 cp website/version.json "$WEBROOT/version.json"
 cp website/index.html   "$WEBROOT/index.html"
-
-# update.json lo genera aparte (requiere firmas del updater de Tauri)
-if [[ -f "website/update.json" ]]; then
-  cp website/update.json "$WEBROOT/update.json"
-fi
+cp website/update.json  "$WEBROOT/update.json"
 
 echo "✔ Despliegue de v$VERSION completado."
-echo "  Recuerda: si hay update.json con firmas nuevas, cópialo manualmente."
