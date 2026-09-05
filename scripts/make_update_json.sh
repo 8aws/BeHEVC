@@ -34,8 +34,11 @@ read_sig() {
 # Tauri 2 genera: <app>.app.tar.gz.sig (macOS), <setup>.nsis.zip.sig (Windows),
 # <app>.AppImage.tar.gz.sig (Linux).
 # CI renombra el bundle macOS con sufijo de arch para evitar colisiones.
+# Fallback al nombre genérico para compatibilidad con releases anteriores al rename.
 SIG_MAC_ARM=$(read_sig "B265_aarch64.app.tar.gz.sig")
+[[ -z "$SIG_MAC_ARM" ]] && SIG_MAC_ARM=$(read_sig "B265.app.tar.gz.sig")
 SIG_MAC_X64=$(read_sig "B265_x86_64.app.tar.gz.sig")
+[[ -z "$SIG_MAC_X64" ]] && SIG_MAC_X64=$(read_sig "B265.app.tar.gz.sig")
 SIG_WIN_X64=$(read_sig "B265_${VERSION}_x64-setup.exe.nsis.zip.sig")
 SIG_WIN_ARM=$(read_sig "B265_${VERSION}_arm64-setup.exe.nsis.zip.sig")
 SIG_LIN_X64=$(read_sig "B265_${VERSION}_amd64.AppImage.tar.gz.sig")
@@ -59,8 +62,14 @@ add_platform() {
   platforms_json+=$'\n'"    \"$key\": { \"signature\": $(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$sig"), \"url\": \"$url\" }"
 }
 
-add_platform "darwin-aarch64" "$SIG_MAC_ARM" "$BASE_URL/B265_aarch64.app.tar.gz"
-add_platform "darwin-x86_64"  "$SIG_MAC_X64" "$BASE_URL/B265_x86_64.app.tar.gz"
+# URL: arch-específico si existe el .sig arch-específico; genérico si es fallback
+MAC_ARM_URL="$BASE_URL/B265_aarch64.app.tar.gz"
+[[ -z "$(read_sig "B265_aarch64.app.tar.gz.sig")" ]] && MAC_ARM_URL="$BASE_URL/B265.app.tar.gz"
+MAC_X64_URL="$BASE_URL/B265_x86_64.app.tar.gz"
+[[ -z "$(read_sig "B265_x86_64.app.tar.gz.sig")" ]] && MAC_X64_URL="$BASE_URL/B265.app.tar.gz"
+
+add_platform "darwin-aarch64" "$SIG_MAC_ARM" "$MAC_ARM_URL"
+add_platform "darwin-x86_64"  "$SIG_MAC_X64" "$MAC_X64_URL"
 add_platform "windows-x86_64" "$SIG_WIN_X64" "$BASE_URL/B265_${VERSION}_x64-setup.exe.nsis.zip"
 add_platform "windows-aarch64" "$SIG_WIN_ARM" "$BASE_URL/B265_${VERSION}_arm64-setup.exe.nsis.zip"
 add_platform "linux-x86_64"   "$SIG_LIN_X64" "$BASE_URL/B265_${VERSION}_amd64.AppImage.tar.gz"
