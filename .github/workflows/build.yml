@@ -230,6 +230,18 @@ jobs:
         working-directory: behevc-tauri
         run: npm run tauri build -- --target ${{ matrix.target }}
 
+      # ── Renombrar bundle updater macOS con sufijo de arch ────────────────
+      # Tauri genera "B265.app.tar.gz" sin distinción de arch para ambos jobs.
+      # Lo renombramos antes de subir para que arm64 e intel no se sobreescriban.
+      - name: Renombrar bundle updater macOS (arch)
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          ARCH=$(echo "${{ matrix.target }}" | cut -d- -f1)
+          BUNDLE=behevc-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos
+          [[ -f "$BUNDLE/B265.app.tar.gz" ]] && mv "$BUNDLE/B265.app.tar.gz" "$BUNDLE/B265_${ARCH}.app.tar.gz"
+          [[ -f "$BUNDLE/B265.app.tar.gz.sig" ]] && mv "$BUNDLE/B265.app.tar.gz.sig" "$BUNDLE/B265_${ARCH}.app.tar.gz.sig"
+
       # ── Publicar en el Release (solo en tags vX.Y.Z) ──────────────────────
       # Cada job sube SU instalador como asset del Release (borrador). Los assets
       # de Release NO cuentan en la cuota de "artifacts" de Actions, así que esto

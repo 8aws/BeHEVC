@@ -33,8 +33,9 @@ read_sig() {
 
 # Tauri 2 genera: <app>.app.tar.gz.sig (macOS), <setup>.nsis.zip.sig (Windows),
 # <app>.AppImage.tar.gz.sig (Linux).
-SIG_MAC_ARM=$(read_sig "B265.app.tar.gz.sig")
-SIG_MAC_X64=$(read_sig "B265.app.tar.gz.sig")  # mismo nombre, distinto job
+# CI renombra el bundle macOS con sufijo de arch para evitar colisiones.
+SIG_MAC_ARM=$(read_sig "B265_aarch64.app.tar.gz.sig")
+SIG_MAC_X64=$(read_sig "B265_x86_64.app.tar.gz.sig")
 SIG_WIN_X64=$(read_sig "B265_${VERSION}_x64-setup.exe.nsis.zip.sig")
 SIG_WIN_ARM=$(read_sig "B265_${VERSION}_arm64-setup.exe.nsis.zip.sig")
 SIG_LIN_X64=$(read_sig "B265_${VERSION}_amd64.AppImage.tar.gz.sig")
@@ -49,36 +50,28 @@ d = json.load(open('website/version.json'))
 print(d['app']['changelog'])
 " 2>/dev/null || echo "B265 $VERSION")
 
+# Solo incluir plataformas que tienen firma válida
+platforms_json=""
+add_platform() {
+  local key="$1" sig="$2" url="$3"
+  [[ -z "$sig" ]] && return
+  [[ -n "$platforms_json" ]] && platforms_json+=","
+  platforms_json+=$'\n'"    \"$key\": { \"signature\": $(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$sig"), \"url\": \"$url\" }"
+}
+
+add_platform "darwin-aarch64" "$SIG_MAC_ARM" "$BASE_URL/B265_aarch64.app.tar.gz"
+add_platform "darwin-x86_64"  "$SIG_MAC_X64" "$BASE_URL/B265_x86_64.app.tar.gz"
+add_platform "windows-x86_64" "$SIG_WIN_X64" "$BASE_URL/B265_${VERSION}_x64-setup.exe.nsis.zip"
+add_platform "windows-aarch64" "$SIG_WIN_ARM" "$BASE_URL/B265_${VERSION}_arm64-setup.exe.nsis.zip"
+add_platform "linux-x86_64"   "$SIG_LIN_X64" "$BASE_URL/B265_${VERSION}_amd64.AppImage.tar.gz"
+add_platform "linux-aarch64"  "$SIG_LIN_ARM" "$BASE_URL/B265_${VERSION}_aarch64.AppImage.tar.gz"
+
 cat > website/update.json << EOF
 {
   "version": "$VERSION",
   "notes": $(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$NOTES"),
   "pub_date": "$PUB_DATE",
-  "platforms": {
-    "darwin-aarch64": {
-      "signature": "$SIG_MAC_ARM",
-      "url": "$BASE_URL/B265_${VERSION}_aarch64.dmg"
-    },
-    "darwin-x86_64": {
-      "signature": "$SIG_MAC_X64",
-      "url": "$BASE_URL/B265_${VERSION}_x64.dmg"
-    },
-    "windows-x86_64": {
-      "signature": "$SIG_WIN_X64",
-      "url": "$BASE_URL/B265_${VERSION}_x64-setup.exe"
-    },
-    "windows-aarch64": {
-      "signature": "$SIG_WIN_ARM",
-      "url": "$BASE_URL/B265_${VERSION}_arm64-setup.exe"
-    },
-    "linux-x86_64": {
-      "signature": "$SIG_LIN_X64",
-      "url": "$BASE_URL/B265_${VERSION}_amd64.AppImage"
-    },
-    "linux-aarch64": {
-      "signature": "$SIG_LIN_ARM",
-      "url": "$BASE_URL/B265_${VERSION}_aarch64.AppImage"
-    }
+  "platforms": {${platforms_json}
   }
 }
 EOF
