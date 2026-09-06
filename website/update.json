@@ -1,0 +1,9 @@
+{
+  "version": "3.3.0",
+  "notes": "B265 3.3: actualizaci\u00f3n autom\u00e1tica en segundo plano, progreso de conversi\u00f3n en el icono del dock/taskbar.",
+  "pub_date": "2026-09-05T18:49:23Z",
+  "platforms": {
+    "darwin-aarch64": { "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUMHU4bVBPWXJWNjJWcTJlaXZ1bjlVUWlSalhITDBod3NnN3dFOXNjdWtUMXpDd3p0ZWhhSGVrOVNHOEtvZWtZc0pZVlFWdmcyR0dydktqdjV5bmtOWSsvYjI1K3Y5ZlFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4NjEzNTU1CWZpbGU6QjI2NS5hcHAudGFyLmd6CmJMZUZhU1ZjRVZ4bW1PRmRrZktKZGpyVUwrSWk0MWM0cFB4dExSUVhNL1pTZ2RCa3k0b2pJVm1MMDdXaHdFMEZIN3o2Nm40dDBEYkFLQk0yQlZneUN3PT0K", "url": "https://b265.uverse.es/downloads/B265.app.tar.gz" },
+    "darwin-x86_64": { "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUMHU4bVBPWXJWNjJWcTJlaXZ1bjlVUWlSalhITDBod3NnN3dFOXNjdWtUMXpDd3p0ZWhhSGVrOVNHOEtvZWtZc0pZVlFWdmcyR0dydktqdjV5bmtOWSsvYjI1K3Y5ZlFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4NjEzNTU1CWZpbGU6QjI2NS5hcHAudGFyLmd6CmJMZUZhU1ZjRVZ4bW1PRmRrZktKZGpyVUwrSWk0MWM0cFB4dExSUVhNL1pTZ2RCa3k0b2pJVm1MMDdXaHdFMEZIN3o2Nm40dDBEYkFLQk0yQlZneUN3PT0K", "url": "https://b265.uverse.es/downloads/B265.app.tar.gz" }
+  }
+}

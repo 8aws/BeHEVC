@@ -98,8 +98,8 @@ echo "→ Generando update.json con firmas del updater…"
 ./scripts/make_update_json.sh "$VERSION"
 
 echo "→ Desplegando web al servidor…"
-scp website/version.json "$SSH_HOST:$WEBROOT/version.json"
-scp website/index.html   "$SSH_HOST:$WEBROOT/index.html"
-scp website/update.json  "$SSH_HOST:$WEBROOT/update.json"
+ssh "$SSH_HOST" "cat > $WEBROOT/version.json" < website/version.json
+ssh "$SSH_HOST" "cat > $WEBROOT/index.html"   < website/index.html
+ssh "$SSH_HOST" "cat > $WEBROOT/update.json"  < website/update.json
 
 echo "✔ Despliegue de v$VERSION completado."
